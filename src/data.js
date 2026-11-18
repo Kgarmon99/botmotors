@@ -25,8 +25,43 @@ const CARS = [
    blurb:'Brand new. 3-year warranty. Lease special available.', drive:{top:44, acc:11, grip:1.15, wobble:0},
    lease:{due:2500, mo:299, months:36, milesYr:10000}, issue:null },
  { id:'titan', name:'Titan Pickup', year:2026, style:'truck', color:'#111827', price:43900, floor:41300, miles:8, mpg:20, fuel:'gas', rel:4, fun:4, ins:250, maint:35, dep:.18, used:false, warranty:true, markup:2500,
-   blurb:'The dream truck. Slick\'s favorite car to sell.', drive:{top:42, acc:10, grip:1, wobble:0}, issue:null }
+   blurb:'The dream truck. Slick\'s favorite car to sell.', drive:{top:42, acc:10, grip:1, wobble:0}, issue:null },
+ { id:'workhorse', name:'Workhorse 1500', year:2014, style:'truck', color:'#4B5E4A', price:11800, floor:10300, miles:142000, mpg:17, fuel:'gas', rel:3, fun:3, ins:150, maint:70, dep:.09, used:true, cargo:true,
+   blurb:'Work truck. Ladder rack, toolbox, a few honest dents.', drive:{top:38, acc:8.5, grip:.95, wobble:.12},
+   issue:{p:.5, what:'Rusted brake lines', cost:900, from:2, to:7, tell:'The brake pedal feels soft and sinks a little.'} }
 ];
+CARS.forEach(c=>{ c.ins0=c.ins; if(c.style==='truck'||c.style==='hatch') c.cargo=true; });
+const RATES0 = JSON.parse(JSON.stringify(RATES));
+/* three lives to play. Same lot, different right answers. */
+const PROFILES = [
+ { id:'crew', name:'Jordan', age:18, job:'Crew lead at Byte Burger', takeHome:3000, gross:3700, living:1650, savings:6500, credit:670, milesMonth:750, insMul:1, busOk:false, diff:'Normal', col:'#BBF7D0',
+   need:'25-minute drive to work. The bus takes 70 minutes each way.' },
+ { id:'student', name:'Riley', age:19, job:'Bot U student + part-time at the bookstore', takeHome:2100, gross:2350, living:1150, savings:5200, credit:650, milesMonth:450, insMul:.85, busOk:true, diff:'Hard', col:'#C7D2FE',
+   need:'Classes and work are both on the bus line. Good-student insurance discount.' },
+ { id:'appr', name:'Sam', age:21, job:'Apprentice electrician', takeHome:3600, gross:4500, living:1900, savings:9000, credit:705, milesMonth:1100, insMul:.8, busOk:false, needsCargo:true, diff:'Easy', col:'#FDE68A',
+   need:'Hauls tools to a different job site every day. Needs room for gear.' }
+];
+const BUS = { id:'bus', name:'Bus pass', year:'', price:0, floor:0, ins:0, ins0:0, maint:0, fun:1, rel:4, dep:0, fuel:'bus', used:false, issue:null, style:'bus' };
+/* choices that come up during year one */
+const DECISIONS = [
+ { id:'shop', best:[0], when:[2,4], q:'Your insurance renews next month. Spend 30 minutes comparing quotes?', a:[
+   {t:'Compare quotes', fx:{insMul:.86}, msg:'Found the same coverage for 14% less.', lesson:'Insurers price the same driver differently. Shopping around every year is free money.'},
+   {t:'Just auto-renew', fx:{insMul:1.05}, msg:'Auto-renewed with a 5% "loyalty" increase.', lesson:'Auto-renewal often quietly raises your rate.'} ] },
+ { id:'rims', best:[1], when:[3,6], q:'A friend is selling custom rims and a sound system for $900. Want them?', a:[
+   {t:'Buy them ($900)', fx:{cost:900, joy:1}, msg:'Looks amazing. Your savings, less so.', lesson:'Upgrades feel great for a week. The money is gone for good.'},
+   {t:'Pass', fx:{}, msg:'You kept $900 in savings.', lesson:'Saying no to a want protects your emergency fund.'} ] },
+ { id:'light', best:[0], when:[4,7], q:'The check-engine light just came on. What do you do?', a:[
+   {t:'Get it checked now ($180)', fx:{cost:180}, msg:'Loose sensor. Fixed for $180.', lesson:'Small problems fixed early stay small.'},
+   {t:'Ignore it', fx:{risk:{p:.55, cost:950, what:'Ignored warning light became a $950 repair'}}, msg:'Light stays on. Fingers crossed.', lesson:'Ignoring a warning light is a bet. The house usually wins.'} ] },
+ { id:'bonus', best:[0,1], when:[6,9], q:'You got a $600 bonus at work! What will you do with it?', a:[
+   {t:'Extra car-loan payment', fx:{extraPay:600, needsLoan:true}, msg:'$600 straight to the loan principal.', lesson:'Extra payments cut your balance and every future interest charge.'},
+   {t:'Put it in savings', fx:{save:600}, msg:'Emergency fund +$600.', lesson:'Cash in savings is what keeps a repair off a credit card.'},
+   {t:'Weekend trip!', fx:{joy:1}, msg:'Great memories. $600 well spent? You decide.', lesson:'Spending on fun is fine when it\'s a choice, not an accident.'} ] },
+ { id:'friend', best:[1], when:[5,10], q:'Your friend wants to borrow your car for a road trip.', a:[
+   {t:'Sure, take it', fx:{risk:{p:.35, cost:500, what:'Friend backed into a pole · $500 deductible', ins:15}}, msg:'Keys handed over.', lesson:'When someone else drives your car, your insurance pays and your rate can go up.'},
+   {t:'Sorry, no', fx:{}, msg:'Awkward, but your car stayed home.', lesson:'Your car, your insurance, your risk.'} ] }
+];
+
 const ADDONS = [
  { id:'warranty', name:'Extended warranty', price:1995, real:'Covers big repairs on a used car. Only worth it if the car is likely to break and you can\'t cover a repair yourself.', usedOnly:true },
  { id:'paint', name:'Paint protection', price:599, real:'Basically a wax job. You can buy a bottle of sealant for $25.' },
@@ -41,6 +76,7 @@ const SLICK = {
     thunder:['FEEL THAT V8! You deserve this.','Imagine pulling up to work in THIS. Only a little more a month!'],
     echo:['Silent and quick! Never buy gas again.','Instant torque, baby!'],
     nova:['Smell that new-car smell! Smells like... payments. I mean SUCCESS.','Brand new, warranty, the works.'],
+    workhorse:['Built for work! Look at that toolbox.','A truck that pays for itself. Probably!'],
     titan:['Now THIS is a vehicle. You\'ll need it for... stuff!','Tow anything! Do you tow things? You could!'] },
   drive:['Feel that? Go on, give it some gas!','Picture yourself driving this every day.','I can get you into this for a great monthly payment.','The speed limit is 35, by the way. Heh.'],
   counter:['Ooh, you\'re killing me. How about {p}?','My manager would fire me! Best I can do is {p}.','We\'re close! Meet me at {p}?'],
@@ -48,6 +84,11 @@ const SLICK = {
   accept:['You drive a hard bargain. Deal!','Ugh, fine. Shake on it!'],
   walk:['Wait wait wait! Come back. I talked to my manager...'],
   final:['That\'s my final offer. Take it or leave it.'],
+  tactics:{
+    rival:'Heads up, that bot by the window asked about this exact car ten minutes ago. If you want it, decide NOW.',
+    manager:'Let me go talk to my manager. Wait right here...',
+    payment:'Forget the price. What MONTHLY payment works for you? I can make anything fit!' },
+  mood:['😤','😬','😏','😎'],
   monthly:['So what monthly payment were you hoping for? I can make ANY car fit!']
 };
 const EVENTS = [
@@ -60,3 +101,7 @@ const EVENTS = [
 const fmt = (n,d=0)=> (n<0?'-':'')+'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
 const pmt = (P, apr, n)=>{ if(P<=0) return 0; const r=apr/12; return r? P*r/(1-Math.pow(1+r,-n)) : P/n; };
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), rand=(a,b)=>a+Math.random()*(b-a), pick=a=>a[Math.floor(Math.random()*a.length)];
+const BUS_RAIN = { id:'rain', best:[1], when:[2,6], q:'Pouring rain all week and your stop has no roof. Rideshare to work instead?', a:[
+   {t:'Rideshare all week ($75)', fx:{cost:75}, msg:'Dry and on time. $75 lighter.', lesson:'Rideshares add up fast. Five trips can cost more than a month of bus fare.'},
+   {t:'Umbrella and boots', fx:{}, msg:'Soggy socks, full wallet.', lesson:'A $20 umbrella beat $75 of rideshares.'} ] };
+const MEDAL=['','🥉','🥈','🥇'];

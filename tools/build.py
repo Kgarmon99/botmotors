@@ -1,7 +1,7 @@
 import os,sys
 R=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 src=lambda f: open(os.path.join(R,'src',f)).read()
-tpl=src('index.tpl.html'); css=src('style.css'); js='\n'.join(src(f) for f in ['data.js','world.js','game.js'])
+tpl=src('index.tpl.html'); css=src('style.css'); js='\n'.join(src(f) for f in ['data.js','world.js','game.js','plus.js'])
 html=tpl.replace('/*CSS*/',css).replace('/*JS*/',js)
 open(os.path.join(R,'index.html'),'w').write(html)
 os.makedirs(os.path.join(R,'dist'),exist_ok=True)

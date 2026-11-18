@@ -1,6 +1,6 @@
 /* ===================== BotMotors · game ===================== */
 const G={mode:'title', you:null, slick:null, mb:null, near:null, keys:new Set(), pad:{}, cash:YOU.savings, known:{}, preapproved:false, deal:null, drive:null, t:0, notes:[]};
-const LOT_SPOTS={rattler:[-15,-6.5,0], commuter:[-9,-6.5,0], volt:[-3,-6.5,0], echo:[3,-6.5,0], thunder:[9,-6.5,0], titan:[15,-6.5,0], nova:[-9,6.5,Math.PI]};
+const LOT_SPOTS={rattler:[-15,-6.5,0], commuter:[-9,-6.5,0], volt:[-3,-6.5,0], echo:[3,-6.5,0], thunder:[9,-6.5,0], titan:[15,-6.5,0], nova:[-9,6.5,Math.PI], workhorse:[9,6.5,Math.PI]};
 const carById=id=>CARS.find(c=>c.id===id);
 const info=id=>G.known[id]||(G.known[id]={inspected:false, fair:false, noticed:false, drove:false});
 
@@ -20,13 +20,18 @@ let AC=null, eng=null;
 function audio(){ if(AC) return; try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
 function tone(f,d=.12,type='triangle',v=.05,slide){ if(!AC) return; const t=AC.currentTime, o=AC.createOscillator(), g=AC.createGain(); o.type=type; o.frequency.setValueAtTime(f,t); if(slide) o.frequency.exponentialRampToValueAtTime(slide,t+d); g.gain.setValueAtTime(.0001,t); g.gain.linearRampToValueAtTime(v,t+.01); g.gain.exponentialRampToValueAtTime(.0001,t+d); o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+d+.02); }
 const sfx={tick:()=>tone(900,.05,'sine',.04), good:()=>{ tone(660,.12); tone(990,.18,'triangle',.05); }, bad:()=>tone(180,.25,'sawtooth',.04,90), cash:()=>{ tone(1320,.08,'square',.025); tone(1760,.12,'square',.02); }, thud:()=>tone(90,.2,'sine',.12,40)};
-function engineOn(on){ if(!AC) return; if(on && !eng){ const o=AC.createOscillator(), f=AC.createBiquadFilter(), g=AC.createGain(); o.type='sawtooth'; f.type='lowpass'; f.frequency.value=520; g.gain.value=.0; o.connect(f); f.connect(g); g.connect(AC.destination); o.start(); eng={o,g,f}; } if(!on && eng){ eng.g.gain.setTargetAtTime(0,AC.currentTime,.1); const e=eng; setTimeout(()=>e.o.stop(),400); eng=null; } }
+function engineOn(on){ if(!AC) return; if(on && !eng){ const o=AC.createOscillator(), o2=AC.createOscillator(), f=AC.createBiquadFilter(), g=AC.createGain(), g2=AC.createGain(); o.type='sawtooth'; o2.type='triangle'; f.type='lowpass'; f.frequency.value=400; f.Q.value=2; g.gain.value=0; g2.gain.value=.6; o.connect(f); o2.connect(g2); g2.connect(f); f.connect(g); g.connect(AC.destination); o.start(); o2.start(); eng={o,o2,g,f}; duck(.35); } if(!on && eng){ eng.g.gain.setTargetAtTime(0,AC.currentTime,.1); const e=eng; setTimeout(()=>{ e.o.stop(); e.o2.stop(); },500); eng=null; duck(1); } }
+function engineTick(D,gas,mph){ if(!eng) return; const c=D.c, t=AC.currentTime;
+  if(c.fuel==='electric'){ const f=180+Math.abs(D.v)*22; eng.o.frequency.setTargetAtTime(f,t,.05); eng.o2.frequency.setTargetAtTime(f*1.5,t,.05); eng.f.frequency.setTargetAtTime(2200,t,.1); eng.g.gain.setTargetAtTime(.006+gas*.006,t,.08); return; }
+  const r=Math.abs(D.v)/c.drive.top, gear=Math.min(4,Math.floor(r*5)), rpm=r*5-gear; if(gear!==D.gear){ if(gear>D.gear&&gas){ eng.g.gain.setValueAtTime(.008,t); D.shiftT=.12; } D.gear=gear; }
+  const v8=c.id==='thunder'||c.style==='truck', base=(v8?38:52)+rpm*(v8?70:95)+gear*6; eng.o.frequency.setTargetAtTime(base,t,.04); eng.o2.frequency.setTargetAtTime(base*.5,t,.04);
+  eng.f.frequency.setTargetAtTime(300+rpm*500+gas*250,t,.06); eng.g.gain.setTargetAtTime((v8?.034:.026)+gas*.014,t,D.shiftT>0?.15:.05); D.shiftT=Math.max(0,(D.shiftT||0)-.016); }
 
 /* ---------- boot ---------- */
 async function boot(){
   initThree(); setupMaterials();
   ['tLogo','hLogo','aLogo'].forEach(id=>$('#'+id).src=MB_ASSETS.logo);
-  buildWorld();
+  buildWorld(); worldPlus();
   GLTF.crowd=await parseGLB(MB_ASSETS.crowd); GLTF.hero=await parseGLB(MB_ASSETS.hero);
   CARS.forEach(c=>{ const g=makeCar(c), [x,z,r]=LOT_SPOTS[c.id]; g.position.set(x,0,z); g.rotation.y=r; scene.add(g); W.lotCars.set(c.id,g);
     const tag=sign(scene,[{t:c.year+' '+c.name,size:40,color:'#0B1220'},{t:fmt(c.price),size:64,color:c.used?'#B45309':'#047857'}],2.6,1.1,x,2.75+(c.style==='truck'?.5:0),z,{bg:'#FFFFFF',r:18,w:512,h:216}); tag.userData.bill=true; g.userData.tag=tag; });
@@ -38,13 +43,14 @@ async function boot(){
   G.mech=makeRig(GLTF.crowd, MB.mech, .85,'g'); G.mech.root.position.set(-20,0,11.6); scene.add(G.mech.root);
   G.cuBot=makeRig(GLTF.crowd, MB.cu, .85,'g'); G.cuBot.root.position.set(19,0,10.6); scene.add(G.cuBot.root);
   G.mb=makeRig(GLTF.hero, MB.hero, 1.0,'g'); G.mb.root.position.set(-1.5,1.4,10); scene.add(G.mb.root);
+  livePlus();
   camera.position.set(30,24,34); camera.lookAt(0,0,0);
   $('#btnStart').disabled=false; $('#btnStart').textContent='Start shopping';
   requestAnimationFrame(loop);
 }
-$('#btnStart').onclick=()=>{ audio(); $('#title').hidden=true; startLot(true); };
+$('#btnStart').onclick=()=>{ audio(); musicStart(); applyProfile(PICK); $('#title').hidden=true; G.you.root.position.set(0,0,10); hud(); startLot(true); };
 function startLot(first){ G.mode='lot'; $('#hud').hidden=false; hud(); document.body.classList.remove('driving'); $('#dhud').hidden=true; $('#pads').hidden=true;
-  if(first){ setTimeout(()=>advise('Hey! I\'m MoneyBot. You take home <b>'+fmt(YOU.takeHome)+' a month</b> and have <b>'+fmt(YOU.savings)+'</b> saved. Try to keep <b>everything</b> the car costs (payment, insurance, gas, repairs) under <b>'+fmt(YOU.takeHome*GOOD_PCT)+'/month</b>. Walk up to any car to check it out.',12000),600);
+  if(first){ setTimeout(()=>advise('Hey! I\'m MoneyBot. You\'re <b>'+YOU.name+'</b>, '+YOU.job.toLowerCase()+'. You take home <b>'+fmt(YOU.takeHome)+' a month</b> and have <b>'+fmt(YOU.savings)+'</b> saved. Try to keep <b>everything</b> the car costs (payment, insurance, gas, repairs) under <b>'+fmt(YOU.takeHome*GOOD_PCT)+'/month</b>. Walk up to any car to check it out.',12000),600);
     setTimeout(()=>slick(pick(SLICK.hello)),3500); } }
 
 /* ---------- input ---------- */
@@ -69,21 +75,22 @@ function lotTick(dt){
     r.rotation.y=Math.atan2(mx,mz); r.position.y=Math.abs(Math.sin(G.t*11))*.05; if(G.you.cur!=='Idle') rigPlay(G.you,'Idle'); }
   /* nearest car / kiosk */
   let best=null, bd=4.2; for(const [id,g] of W.lotCars){ const d=Math.hypot(g.position.x-r.position.x, g.position.z-r.position.z); if(d<bd){ bd=d; best=id; } }
-  if(Math.hypot(W.cu.x-r.position.x, W.cu.z-r.position.z)<4.2) best='@cu'; if(Math.hypot(W.mech.x-r.position.x, W.mech.z+3-r.position.z)<4.5) best='@mech';
-  if(best!==G.near){ G.near=best; const p=$('#prompt'); if(best && $('#card').hidden){ p.hidden=false; p.innerHTML=(MOBILE?'Tap to ':'<kbd>E</kbd> ')+(best==='@cu'?'Talk to the credit union':best==='@mech'?'Talk to Mike the mechanic':'Look at the '+carById(best).name); p.onclick=()=>openCard(best); } else p.hidden=true; if(best && best[0]!=='@' && Math.random()<.5) slick(pick(SLICK.pitch[best])); }
+  if(Math.hypot(W.cu.x-r.position.x, W.cu.z-r.position.z)<4.2) best='@cu'; if(Math.hypot(W.mech.x-r.position.x, W.mech.z+3-r.position.z)<4.5) best='@mech'; if(Math.hypot(W.bus.x-r.position.x, W.bus.z-r.position.z)<4) best='@bus';
+  if(best!==G.near){ G.near=best; const p=$('#prompt'); if(best && $('#card').hidden){ p.hidden=false; p.innerHTML=(MOBILE?'Tap to ':'<kbd>E</kbd> ')+(best==='@cu'?'Talk to the credit union':best==='@mech'?'Talk to Mike the mechanic':best==='@bus'?'Check the bus schedule':'Look at the '+carById(best).name); p.onclick=()=>openCard(best); } else p.hidden=true; if(best && best[0]!=='@'){ chirp(best); if(Math.random()<.5) slick(pick(SLICK.pitch[best])); } }
   /* Slick drifts toward you; MoneyBot hovers nearby */
   const s=G.slick.root, tx=r.position.x+2.2, tz=r.position.z-1.4, dd=Math.hypot(tx-s.position.x,tz-s.position.z); if(dd>3){ s.position.x+=(tx-s.position.x)/dd*4.2*dt; s.position.z+=(tz-s.position.z)/dd*4.2*dt; s.rotation.y=Math.atan2(tx-s.position.x,tz-s.position.z); } else s.rotation.y=Math.atan2(r.position.x-s.position.x,r.position.z-s.position.z);
   const m=G.mb.root; m.position.x+=(r.position.x-1.6-m.position.x)*dt*1.5; m.position.z+=(r.position.z+.8-m.position.z)*dt*1.5; m.position.y=1.5+Math.sin(G.t*2)*.12; m.rotation.y=Math.atan2(camera.position.x-m.position.x,camera.position.z-m.position.z);
   /* camera */
   const cx=r.position.x*.75, cz=r.position.z; camera.position.x+=(cx+11-camera.position.x)*dt*2.5; camera.position.y+=(13-camera.position.y)*dt*2.5; camera.position.z+=(cz+17-camera.position.z)*dt*2.5; camera.lookAt(camera.position.x-11, 0, camera.position.z-17);
   sun.position.set(r.position.x+30,50,r.position.z+25); sun.target.position.set(r.position.x,0,r.position.z);
+  lotPlus(dt,r,L>0 && !G.modal && $('#card').hidden);
 }
 
 /* ---------- car card ---------- */
 function monthlyFuel(c){ return c.fuel==='electric' ? YOU.milesMonth*KWH_MILE : YOU.milesMonth/c.mpg*(c.fuel==='premium'?PREMIUM:GAS); }
 function openCard(id){ G.walkTo=null; $('#prompt').hidden=true;
-  if(id==='@cu') return creditUnion(); if(id==='@mech') return mechanic();
-  const c=carById(id), I=info(id), fuel=monthlyFuel(c), estPay=pmt(c.price*(1+TAX)+DOC_FEE+TITLE_FEE-1500, c.used?RATES.dealer.used:RATES.dealer.new, 60), ins=c.ins+(c.ins<150?70:0), tot=estPay+ins+fuel+c.maint;
+  if(id==='@cu') return creditUnion(); if(id==='@mech') return mechanic(); if(id==='@bus') return busStop();
+  const c=carById(id), I=info(id), fuel=monthlyFuel(c), estPay=pmt(c.price*(1+TAX)+DOC_FEE+TITLE_FEE-1500, c.used?RATES.dealer.used:RATES.dealer.new, 60), ins=c.ins+(c.ins0<150?70:0), tools=toolCost(c), tot=estPay+ins+fuel+c.maint+tools, med=G.medals[id];
   const card=$('#card'); card.hidden=false; G.cardId=id; G.slick&&rigPlay(G.slick,'UpPoint',true);
   card.innerHTML=`<button class="x" onclick="closeCard()">×</button><div class="eyebrow">${c.used?'Used':'Brand new'} · ${c.year}</div><h2>${c.name}</h2><div class="sub">${c.blurb}</div>
    <div class="price">${fmt(c.price)} <small>sticker price${c.markup?' (includes '+fmt(c.markup)+' dealer markup)':''}</small></div>
@@ -92,15 +99,17 @@ function openCard(id){ G.walkTo=null; $('#prompt').hidden=true;
    ${I.fair?`<div class="note good">📱 <b>Fair price check:</b> cars like this sell for about <b>${fmt(Math.round(c.floor*1.01/100)*100)} – ${fmt(Math.round(c.floor*1.07/100)*100)}</b>. The sticker is the opening bid, not the price.</div>`:''}
    ${I.inspected?(c.issue&&I.found?`<div class="note bad">🔧 <b>Mike found a problem:</b> ${c.issue.what}. Fixing it costs about <b>${fmt(c.issue.cost)}</b>. Use that when you negotiate.</div>`:`<div class="note good">🔧 <b>Mike's inspection:</b> No major problems found.</div>`):''}
    ${I.noticed&&c.issue&&c.issue.tell?`<div class="note bad">👀 <b>On the test drive:</b> ${c.issue.tell}</div>`:''}
+   ${PROFILE.needsCargo?(c.cargo?'<div class="note good">🧰 <b>Fits your tools.</b> Room for gear on every job.</div>':'<div class="note bad">🧰 <b>No room for your tools.</b> You\'d rent a van a few times a month.</div>'):''}
+   ${med?`<div class="note good">${MEDAL[med]} <b>Test drive medal:</b> ${['','Bronze','Silver','Gold'][med]}</div>`:''}
    ${c.asis?'<div class="note bad">⚠️ <b>Sold as-is.</b> If it breaks the day after you buy it, that\'s on you.</div>':''}
    <div class="est"><div class="eyebrow" style="margin-bottom:6px">Rough monthly cost</div>
     <div class="row"><span>Loan payment <small>(60 mo, ${fmt(1500)} down)</small></span><span>${fmt(estPay)}</span></div>
-    <div class="row"><span>Insurance <small>(age 18${c.ins<150?', full coverage':''})</small></span><span>${fmt(ins)}</span></div>
+    <div class="row"><span>Insurance <small>(age ${YOU.age}${c.ins0<150?', full coverage':''})</small></span><span>${fmt(ins)}</span></div>
     <div class="row"><span>${c.fuel==='electric'?'Charging':'Gas'} <small>(${YOU.milesMonth} mi)</small></span><span>${fmt(fuel)}</span></div>
-    <div class="row"><span>Upkeep &amp; repairs</span><span>${fmt(c.maint)}</span></div>
+    <div class="row"><span>Upkeep &amp; repairs</span><span>${fmt(c.maint)}</span></div>${tools?`<div class="row"><span>Van rentals for tools</span><span>${fmt(tools)}</span></div>`:''}
     <div class="row tot"><span>All in</span><span style="color:${tot<=YOU.takeHome*GOOD_PCT?'var(--green)':'var(--red)'}">${fmt(tot)}/mo</span></div></div>
    <div class="acts">
-    <button class="btn pri" data-a="drive"><span>🚗 Test drive</span><small>Free</small></button>
+    <button class="btn pri" data-a="drive"><span>🚗 Test drive</span><small>${med?'Beat your '+['','bronze','silver','gold'][med]:'Free · grab coins'}</small></button>
     ${c.used?`<button class="btn" data-a="inspect" ${I.inspected?'disabled':''}><span>🔧 Pre-purchase inspection</span><small>${I.inspected?'Done':fmt(INSPECT_FEE)}</small></button>`:'<button class="btn" disabled><span>🔧 Inspection</span><small>New, under warranty</small></button>'}
     <button class="btn" data-a="fair" ${I.fair?'disabled':''}><span>📱 Check the fair price</span><small>${I.fair?'Done':'Free app'}</small></button>
     <button class="btn gold" data-a="deal"><span>🤝 Talk numbers with Slick</span><small>Negotiate</small></button>
@@ -128,9 +137,9 @@ const CPS=[60,160,250,345];
 function startDrive(id){ closeCard(); const c=carById(id); fade(()=>{
   G.mode='drive'; document.body.classList.add('driving'); $('#dhud').hidden=false; $('#pads').hidden=!MOBILE; $('#prompt').hidden=true;
   const car=W.lotCars.get(id); car.visible=false; const g=makeCar(c); scene.add(g);
-  G.drive={id, c, g, x:0, z:LOT.z1-2, h:0, v:0, t:0, cp:0, bumps:0, cones:0, top:0, speedT:0, ticket:false, told:false, steer:0, lastS:0, laps:0};
-  g.position.set(G.drive.x,0,G.drive.z); spawnCones(); spawnTraffic(); [G.you.root,G.slick.root,G.mb.root].forEach(o=>o.visible=false);
-  engineOn(true); slick('Buckle up! Out the gate, take a right, and follow the arches around the block.',5000); }); }
+  G.drive={id, c, g, x:0, z:LOT.z1-2, h:0, vh:0, coins:0, pitch:0, gear:0, v:0, t:0, cp:0, bumps:0, cones:0, top:0, speedT:0, ticket:false, told:false, steer:0, lastS:0, laps:0};
+  g.children[0].rotation.order='YXZ'; g.position.set(G.drive.x,0,G.drive.z); spawnCones(); spawnCoins(); [G.you.root,G.slick.root,G.mb.root].forEach(o=>o.visible=false);
+  engineOn(true); slick('Buckle up! Out the gate, take a right, follow the arches around the block. Grab the coins!',5000); advise('Drive the loop through all 4 arches. Collect coins and drive clean for a <b>gold medal</b>. <b>H</b> = horn.',7000); }); }
 function spawnCones(){ W.cones.forEach(c=>scene.remove(c.m)); W.cones=[]; const cm=mat('#F97316',{roughness:.6});
   for(let i=0;i<8;i++){ const s=262+i*7, p=loopAt(s), side=(i%2?1:-1)*1.6; const m=new THREE.Group(); const cn=new THREE.Mesh(new THREE.ConeGeometry(.28,.7,12),cm); cn.position.y=.35; cn.castShadow=true; m.add(cn); bx(m,.6,.05,.6,0,0,0,mat('#111827'),false); m.position.set(p.x-p.dz*side,0,p.z+p.dx*side); scene.add(m); W.cones.push({m,vx:0,vy:0,vz:0,hit:false}); } }
 function spawnTraffic(){ W.traffic.forEach(t=>scene.remove(t.g)); W.traffic=[]; ['#F59E0B','#22C55E','#A855F7'].forEach((col,i)=>{ const g=makeCar({id:'t'+i, style:pick(['sedan','hatch','ev']), color:col}); scene.add(g); W.traffic.push({g, s:90+i*110, v:10+i*1.5}); }); }
@@ -141,36 +150,47 @@ function driveTick(dt){ const D=G.drive; if(!D) return; arches(); D.t+=dt; const
   D.steer+=(st-D.steer)*Math.min(1,dt*8); const turn=D.steer*1.9*sp.grip*Math.min(1,Math.abs(D.v)/5)*(1-.3*Math.abs(D.v)/sp.top)*Math.sign(D.v||1);
   D.h+=turn*dt; if(sp.wobble && gas && D.v>4){ D.h+=(Math.random()-.5)*sp.wobble*dt*1.6; }
   if(c.id==='commuter' && brk && D.v>6){ D.h+=.25*dt; if(Math.random()<dt*3) tone(2400,.15,'sine',.012); }
-  const nx=D.x+Math.sin(D.h)*D.v*dt, nz=D.z+Math.cos(D.h)*D.v*dt;
-  if(onRoad(nx,nz)||onLot(nx,nz)){ D.x=nx; D.z=nz; } else { D.v*=-.25; D.bumps++; sfx.thud(); shake=.35; if(Math.random()<.4) slick(pick(['Whoa! Easy on my car!','That\'s gonna leave a mark. Heh.','Curb! CURB!'])); }
-  /* traffic */
-  W.traffic.forEach(t=>{ t.s=(t.s+t.v*dt)%LOOP.len; const p=loopAt(t.s); const lane=2.6; t.g.position.set(p.x-p.dz*lane*-1,0,p.z+p.dx*lane*-1); t.g.rotation.y=Math.atan2(p.dx,p.dz); t.g.userData.wheels.forEach(w=>w.children[0].rotation.y+=t.v*dt);
-    if(Math.hypot(t.g.position.x-D.x,t.g.position.z-D.z)<2.4 && !t.cool){ t.cool=1.2; D.v*=.2; D.bumps++; sfx.thud(); shake=.5; slick('You hit someone! That\'s how insurance rates go UP.'); } if(t.cool) t.cool=Math.max(0,t.cool-dt); });
+  /* the car's heading leads, its momentum follows: that gap is the drift */
+  let dh=D.h-D.vh; dh=Math.atan2(Math.sin(dh),Math.cos(dh)); D.vh+=dh*Math.min(1,dt*(2.4+sp.grip*3.4)); dh=Math.atan2(Math.sin(D.h-D.vh),Math.cos(D.h-D.vh));
+  const nx=D.x+Math.sin(D.vh)*D.v*dt, nz=D.z+Math.cos(D.vh)*D.v*dt;
+  if(onRoad(nx,nz)||onLot(nx,nz)){ D.x=nx; D.z=nz; } else { const hard=Math.abs(D.v)>6; D.v*=-.25; D.vh=D.h; D.bumps++; sfx.thud(); shake=.35; if(hard) for(let i=0;i<8;i++) spawnPuff(nx,.4,nz,{color:'#FDBA74',size:.12,grow:.2,life:.45,vx:rand(-3,3),vy:rand(2,4),vz:rand(-3,3),g:9,op:1}); if(Math.random()<.4) slick(pick(['Whoa! Easy on my car!','That\'s gonna leave a mark. Heh.','Curb! CURB!'])); }
+  /* skids + tire smoke */
+  const g=D.g, skidding=(Math.abs(dh)>.09&&Math.abs(D.v)>7)||(brk&&D.v>12);
+  if(skidding){ D.skT=(D.skT||0)+dt; if(D.skT>.035){ D.skT=0; const lz=-(g.userData.len/2-.8), lx=g.userData.wid/2-.15; [-1,1].forEach(sd=>{ const wx=D.x+Math.sin(D.h)*lz+Math.cos(D.h)*lx*sd, wz=D.z+Math.cos(D.h)*lz-Math.sin(D.h)*lx*sd; skid(wx,wz,D.vh); if(Math.random()<.35) spawnPuff(wx,.3,wz,{color:'#E5E7EB',size:.5,grow:2.4,life:.9,vy:.7,op:.45}); }); }
+    D.sqT=(D.sqT||0)-dt; if(D.sqT<=0){ D.sqT=.16; tone(rand(780,880),.16,'triangle',.008); } if(!D.drifted&&Math.abs(dh)>.25){ D.drifted=1; slick(pick(['Ooh, drifting! Very cool. Very expensive tires.','Easy, Fast and Furious!'])); } }
+  /* traffic is the living city: bump it and you pay */
+  W.amb.forEach(t=>{ if(Math.hypot(t.g.position.x-D.x,t.g.position.z-D.z)<2.4 && !t.cool){ t.cool=1.5; D.v*=.2; D.bumps++; sfx.thud(); shake=.5; hornAt(); slick('You hit someone! That\'s how insurance rates go UP.'); } if(t.cool) t.cool=Math.max(0,t.cool-dt); });
   /* cones */
   W.cones.forEach(o=>{ if(!o.hit && Math.hypot(o.m.position.x-D.x,o.m.position.z-D.z)<1.2){ o.hit=true; D.cones++; o.vx=Math.sin(D.h)*D.v*.6+rand(-2,2); o.vz=Math.cos(D.h)*D.v*.6+rand(-2,2); o.vy=4; tone(320,.08,'square',.03); } if(o.hit){ o.vy-=12*dt; o.m.position.x+=o.vx*dt; o.m.position.z+=o.vz*dt; o.m.position.y=Math.max(0,o.m.position.y+o.vy*dt); o.m.rotation.x+=dt*6; if(o.m.position.y===0){ o.vx*=.9; o.vz*=.9; } } });
+  coinTick(dt,D);
   /* checkpoints + finish */
-  const n=nearestOnLoop(D.x,D.z); if(n.d<ROAD.w){ if(D.cp<CPS.length && Math.abs(n.s-CPS[D.cp])<6){ D.cp++; sfx.good(); W.arch[D.cp-1].visible=false; if(D.cp===2) slick(pick(SLICK.drive)); if(D.cp===CPS.length) slick('Bring her back into the lot and we\'ll talk numbers!'); } }
+  const n=nearestOnLoop(D.x,D.z); if(n.d<ROAD.w){ if(D.cp<CPS.length && Math.abs(n.s-CPS[D.cp])<6){ D.cp++; sfx.good(); burst(W.arch[D.cp-1].position,'#00E676'); W.arch[D.cp-1].visible=false; if(D.cp===2) slick(pick(SLICK.drive)); if(D.cp===CPS.length) slick('Bring her back into the lot and we\'ll talk numbers!'); } }
   if(D.cp>=CPS.length && onLot(D.x,D.z) && D.z<LOT.z1-1) return endDrive(true);
   /* speed, speed camera, issue tell */
   const mph=Math.abs(D.v)*2.237; D.top=Math.max(D.top,mph); if(mph>45){ D.speedT+=dt; } if(!D.ticket && mph>45 && Math.hypot(D.x-W.speedCam.x, D.z-W.speedCam.z)<9){ D.ticket=true; $('#flash').style.opacity=.85; setTimeout(()=>$('#flash').style.opacity=0,120); toast('📸 Speed camera! A ticket is coming in the mail.','bad'); slick('Ha! Hope you like paying tickets.'); }
   if(!D.told && c.issue && c.issue.tell && D.t>14 && gas && D.v>8){ D.told=true; info(c.id).noticed=true; toast('👀 You notice: '+c.issue.tell,'bad'); advise('Did you feel that? <b>'+c.issue.tell+'</b> A test drive is your first inspection.'); note('Test drives can reveal problems: '+c.name+': '+c.issue.tell); }
   if(D.t%18<dt) slick(pick(SLICK.drive));
-  /* car + camera */
-  const g=D.g; g.position.set(D.x,0,D.z); g.rotation.y=D.h; g.userData.wheels.forEach((w,i)=>{ w.children.forEach(m=>m.rotation.y+=D.v*dt/g.userData.r); if(i<2) w.rotation.y=D.steer*.4; }); g.children[0].rotation.z=-D.steer*Math.min(1,Math.abs(D.v)/20)*.04;
-  const fx=Math.sin(D.h), fz=Math.cos(D.h), back=7.5+Math.abs(D.v)*.06; const tx=D.x-fx*back, tz=D.z-fz*back; camera.position.x+=(tx-camera.position.x)*Math.min(1,dt*4); camera.position.z+=(tz-camera.position.z)*Math.min(1,dt*4); camera.position.y+=(3.2-camera.position.y)*Math.min(1,dt*4);
+  /* car body: wheels, pitch under gas/brake, lean in turns, brake lights */
+  g.position.set(D.x,0,D.z); g.rotation.y=D.h; g.userData.wheels.forEach((w,i)=>{ w.children.forEach(m=>m.rotation.y+=D.v*dt/g.userData.r); if(i<2) w.rotation.y=D.steer*.4; });
+  const body=g.children[0]; D.pitch+=(((brk&&D.v>2)?-.035:gas?.022:0)-D.pitch)*Math.min(1,dt*5); body.rotation.z=D.pitch; body.rotation.x+=(-D.steer*Math.min(1,Math.abs(D.v)/18)*.06-dh*.12-body.rotation.x)*Math.min(1,dt*6);
+  g.userData.tail.emissiveIntensity=brk?3:.5;
+  /* camera: trails the momentum, a beat behind the nose */
+  const ch=D.vh*.6+D.h*.4, fx=Math.sin(ch), fz=Math.cos(ch), back=7.2+Math.abs(D.v)*.07; const tx=D.x-fx*back, tz=D.z-fz*back; camera.position.x+=(tx-camera.position.x)*Math.min(1,dt*4); camera.position.z+=(tz-camera.position.z)*Math.min(1,dt*4); camera.position.y+=(3.1-camera.position.y)*Math.min(1,dt*4);
   if(shake>0){ camera.position.x+=(Math.random()-.5)*shake; camera.position.y+=(Math.random()-.5)*shake*.5; shake=Math.max(0,shake-dt*1.5); } if(sp.wobble && gas && D.v>4) camera.position.y+=(Math.random()-.5)*sp.wobble*.05;
-  camera.lookAt(D.x+fx*4,1,D.z+fz*4); sun.position.set(D.x+30,50,D.z+25); sun.target.position.set(D.x,0,D.z);
-  if(eng){ eng.o.frequency.value=55+Math.abs(D.v)*4.2*(c.fuel==='electric'?2.2:1)+(gas?10:0); eng.g.gain.value=c.fuel==='electric'?.012:.03+gas*.015; eng.f.frequency.value=c.fuel==='electric'?1800:420+Math.abs(D.v)*14; }
-  $('#dMph').textContent=Math.round(mph); $('#dMph').parentElement.classList.toggle('fast',mph>45); $('#dCp').textContent=D.cp+'/'+CPS.length; $('#dTime').textContent=Math.floor(D.t/60)+':'+String(Math.floor(D.t%60)).padStart(2,'0'); $('#dBump').textContent=D.bumps+D.cones;
+  camera.lookAt(D.x+Math.sin(D.h)*4,1,D.z+Math.cos(D.h)*4); sun.position.set(D.x+30,50,D.z+25); sun.target.position.set(D.x,0,D.z);
+  G.fov=50+clamp(mph-18,0,40)*.38; $('#speedfx').style.opacity=clamp((mph-28)/30,0,.9);
+  engineTick(D,gas,mph);
+  $('#dMph').textContent=Math.round(mph); $('#dMph').parentElement.classList.toggle('fast',mph>45); $('#dCp').textContent=D.cp+'/'+CPS.length; $('#dTime').textContent=Math.floor(D.t/60)+':'+String(Math.floor(D.t%60)).padStart(2,'0'); $('#dBump').textContent=D.bumps+D.cones; $('#dCoin').textContent=D.coins+'/'+(D.nCoins||0);
 }
 let shake=0;
 $('#btnEndDrive').onclick=()=>endDrive(false);
 function endDrive(done){ const D=G.drive; if(!D) return; engineOn(false); G.drive=null; info(D.id).drove=true; G.drove=(G.drove||0)+1;
   G.habits={bumps:(G.habits?G.habits.bumps:0)+D.bumps+D.cones, ticket:(G.habits&&G.habits.ticket)||D.ticket, speedT:((G.habits&&G.habits.speedT)||0)+D.speedT};
-  fade(()=>{ scene.remove(D.g); W.lotCars.get(D.id).visible=true; W.traffic.forEach(t=>scene.remove(t.g)); W.traffic=[]; W.cones.forEach(c=>scene.remove(c.m)); W.cones=[]; if(W.arch){ W.arch.forEach(a=>scene.remove(a)); W.arch=null; }
+  fade(()=>{ scene.remove(D.g); W.lotCars.get(D.id).visible=true; clearDriveFx(); W.cones.forEach(c=>scene.remove(c.m)); W.cones=[]; if(W.arch){ W.arch.forEach(a=>scene.remove(a)); W.arch=null; }
     [G.you.root,G.slick.root,G.mb.root].forEach(o=>o.visible=true); const sp=W.lotCars.get(D.id).position; G.you.root.position.set(sp.x, 0, sp.z+(sp.z<0?3.2:-3.2)); startLot(false);
-    const c=D.c; modal(`<div class="eyebrow">Test drive · ${c.name}</div><h2>${done?'Back on the lot':'Test drive over'}</h2>
-     <div class="specs"><div><em>Top speed</em><b>${Math.round(D.top)} mph</b></div><div><em>Time</em><b>${Math.floor(D.t/60)}:${String(Math.floor(D.t%60)).padStart(2,'0')}</b></div><div><em>Bumps &amp; cones</em><b>${D.bumps+D.cones}</b></div><div><em>Speed camera</em><b>${D.ticket?'📸 Flashed':'Clean'}</b></div></div>
+    const c=D.c, med=driveMedal(D,done), prev=G.medals[c.id]||0; if(med>prev){ G.medals[c.id]=med; store.set('medals',G.medals); }
+    modal(`<div class="eyebrow">Test drive · ${c.name}</div><div class="medalrow">${med?`<div class="medal m${med}">${MEDAL[med]}</div>`:''}<div><h2>${done?(['Back on the lot','Bronze drive','Silver drive','Gold drive!'][med]):'Test drive over'}</h2><p style="margin:0">${med>prev&&prev?'New best on this car!':done?'Coins '+D.coins+'/'+(D.nCoins||0)+' · gold needs 18+ coins, 1 bump or less, no speeding ticket.':'Finish all 4 arches to earn a medal.'}</p></div></div>
+     <div class="specs"><div><em>Top speed</em><b>${Math.round(D.top)} mph</b></div><div><em>Time</em><b>${Math.floor(D.t/60)}:${String(Math.floor(D.t%60)).padStart(2,'0')}</b></div><div><em>Bumps &amp; cones</em><b>${D.bumps+D.cones}</b></div><div><em>Speed camera</em><b>${D.ticket?'📸 Flashed':'Clean'}</b></div><div><em>Coins</em><b>${D.coins}</b></div></div>
      ${info(c.id).noticed&&c.issue?`<div class="note bad">👀 You noticed: ${c.issue.tell}</div>`:''}
      ${D.ticket||D.bumps>2?'<div class="lesson">How you drive is part of what a car costs. Tickets and accidents raise your insurance for years.</div>':'<div class="lesson">Fun matters too. Just make sure the car still fits your budget once the excitement wears off.</div>'}
      <div class="mact"><button class="btn" id="tdBack">Keep shopping</button><button class="btn gold" id="tdDeal">Talk numbers on this car</button></div>`);
@@ -197,13 +217,15 @@ function renderNeg(){ const N=G.neg, c=N.c, I=info(c.id), fairLo=Math.round(c.fl
    </div><div>
      <div style="font-size:13px;color:var(--txt3)">Slick's patience</div><div class="pbar"><i style="width:${N.patience}%"></i></div>
      <ul class="hist">${N.hist.map(h=>'<li>'+h+'</li>').join('')||'<li>Slick leans back and smiles. "So, what are you thinking?"</li>'}</ul>
+     ${N.tactic?tacticBox(N):''}
      <div class="lesson">Tip: the first price is the seller's wish, not the rule. Make an offer below what you're willing to pay, and be ready to walk away.</div>
    </div></div>`, true);
   G.modalClose=()=>leaveOffice();
   const R=m.querySelector('#offR'); R.oninput=()=>{ N.offer=+R.value; m.querySelector('#offV').textContent=fmt(N.offer); };
   m.querySelector('#negX').onclick=leaveOffice;
   m.querySelector('#offGo').onclick=()=>makeOffer(N.offer); m.querySelector('#offAcc').onclick=()=>closeDeal(N.ask); m.querySelector('#offWalk').onclick=walkAway;
-  m.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>lever(b.dataset.l)); }
+  m.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>lever(b.dataset.l)); m.querySelectorAll('[data-tc]').forEach(b=>b.onclick=()=>tacticAnswer(b.dataset.tc));
+  $('#slickSays .face').textContent=SLICK.mood[Math.min(3,Math.floor(N.patience/26))]; if(N.waiting) m.querySelectorAll('.btn').forEach(b=>b.disabled=true); }
 function lever(k){ const N=G.neg, c=N.c; N.used[k]=1; let drop=0, line='';
   if(k==='markup'){ drop=c.markup; line='Fine, fine. I\'ll take off the market adjustment.'; note('Dealer "market adjustments" are extra profit. You can refuse to pay them.'); }
   if(k==='repair'){ drop=Math.round(c.issue.cost*.6/100)*100; line='A mechanic? Ugh. Okay, I\'ll knock off '+fmt(drop)+'.'; note('An inspection report is negotiation power. Repairs the seller should fix come off the price.'); }
@@ -217,7 +239,8 @@ function makeOffer(o){ const N=G.neg, c=N.c; N.hist.unshift('<b>You:</b> '+fmt(o
   if(o>=c.floor && (o>=N.ask*.985 || N.patience<40 && Math.random()<.7)){ N.hist.unshift('<b>Slick:</b> '+pick(SLICK.accept)); slick(pick(SLICK.accept)); return closeDeal(o); }
   if(N.patience<=0){ N.final=true; const L=pick(SLICK.final); N.hist.unshift('<b>Slick:</b> '+L+' '+fmt(N.ask)); slick(L); sfx.bad(); N.patience=0; return renderNeg(); }
   if(o<c.floor*.88){ const L=pick(SLICK.lowball); N.hist.unshift('<b>Slick:</b> '+L); slick(L); sfx.bad(); return renderNeg(); }
-  const counter=Math.max(c.floor, Math.round((N.ask-(N.ask-o)*rand(.3,.48))/50)*50); N.ask=counter; const L=pick(SLICK.counter).replace('{p}',fmt(counter)); N.hist.unshift('<b>Slick:</b> '+L); slick(L); sfx.tick(); renderNeg(); }
+  const counter=Math.max(c.floor, Math.round((N.ask-(N.ask-o)*rand(.3,.48))/50)*50); N.ask=counter; const L=pick(SLICK.counter).replace('{p}',fmt(counter)); N.hist.unshift('<b>Slick:</b> '+L); slick(L); sfx.tick();
+  if(!N.tUsed && N.hist.length>=4 && Math.random()<.75){ N.tUsed=1; return startTactic(N); } renderNeg(); }
 function walkAway(){ const N=G.neg, c=N.c; N.walked++;
   const lastOffer=N.hist.find(h=>h.startsWith('<b>You:</b>')); const o=lastOffer?+lastOffer.replace(/[^0-9]/g,''):0;
   if(o && N.walked<=2 && Math.random()<.8){ const p=Math.max(c.floor, Math.round((N.ask+o)/2/50)*50); N.ask=p; N.patience=Math.max(N.patience,35); const L=pick(SLICK.walk)+' I can do '+fmt(p)+'.'; N.hist.unshift('<b>Slick:</b> '+L); slick(L,5000); sfx.good(); note('Being willing to walk away is your strongest negotiating move.'); return renderNeg(); }
@@ -274,7 +297,7 @@ function calcDeal(){ const D=G.deal, c=D.c, kind=c.used?'used':'new', base=D.pri
   if(D.method==='cash'){ upfront=total; }
   else if(D.method==='lease'){ upfront=c.lease.due; pay=c.lease.mo*(1+TAX); n=c.lease.months; }
   else { apr=D.method==='cu'?RATES.cu[kind]:RATES.dealer[kind]; n=D.method==='cu'?Math.min(D.term,60):D.term; upfront=D.down; loan=Math.max(0,total-D.down); pay=pmt(loan,apr,n); interest=pay*n-loan; }
-  const full=D.method!=='cash' || c.ins>=150, ins=c.ins+(c.ins<150&&full?70:0), run=monthlyFuel(c)+c.maint;
+  const full=D.method!=='cash' || c.ins0>=150, ins=c.ins+(c.ins0<150&&full?70:0), run=monthlyFuel(c)+c.maint;
   return {upfront, loan, pay, interest, apr, n, ins, full, run, all:pay+ins+run, total}; }
 function signPapers(){ const D=G.deal; G.cash-=D.r.upfront; hud(); sfx.cash(); rigPlay(G.you,'TwistJump',true);
   if(D.method==='cu') note('Your credit union loan saved interest compared with dealer financing.');
@@ -282,54 +305,80 @@ function signPapers(){ const D=G.deal; G.cash-=D.r.upfront; hud(); sfx.cash(); r
   $('#goYear').onclick=yearOne; }
 
 /* ---------- year one ---------- */
-function yearOne(){ const D=G.deal, c=D.c, r=D.r; let save=G.cash, cc=0, carSpent=r.upfront, extra=0, joy=c.fun, months=[], insUp=0, gasMul=1, issueHit=false, warrantyPaid=0;
-  const covered=c.warranty || (D.addList||[]).includes('warranty') && !c.asis;
+function yearOne(){ const D=G.deal, c=D.c, r=D.r, bus=D.method==='bus';
+  const Y=G.year={months:[], save:G.cash, cc:0, carSpent:r.upfront, joy:c.fun, insMul:1, insUp:0, issueHit:false, covered:!!(c.warranty || (D.addList||[]).includes('warranty') && !c.asis), warrantyPaid:0, extra:0, extraMo:0, risks:[], lessons:[], good:0, asked:0, lateShifts:0};
   const hitMonth=c.issue && Math.random()<c.issue.p ? Math.floor(rand(c.issue.from,c.issue.to+1)) : -1;
-  const ticketMonth=G.habits&&G.habits.ticket?Math.floor(rand(1,4)):-1, fenderMonth=G.habits&&G.habits.bumps>=4&&Math.random()<.55?Math.floor(rand(4,11)):-1;
-  for(let mo=1;mo<=12;mo++){ let cost=r.pay+r.ins+insUp+c.maint*rand(.6,1.4)+monthlyFuel(c)*gasMul, evs=[]; gasMul=1;
-    if(mo===hitMonth){ issueHit=true; if(covered){ evs.push({t:'🔧 '+c.issue.what+' · covered by warranty',good:1}); warrantyPaid+=c.issue.cost; } else { cost+=c.issue.cost; evs.push({t:'🔧 '+c.issue.what+' · '+fmt(c.issue.cost)}); joy--; } }
-    if(mo===ticketMonth){ cost+=150; insUp=25; evs.push({t:'📸 Speeding ticket · '+fmt(150)+', insurance +'+fmt(25)+'/mo'}); }
+  const ticketMonth=!bus&&G.habits&&G.habits.ticket?Math.floor(rand(1,4)):-1, fenderMonth=!bus&&G.habits&&G.habits.bumps>=4&&Math.random()<.55?Math.floor(rand(4,11)):-1;
+  /* three decisions land on three different months */
+  const pool=bus?[BUS_RAIN, DECISIONS.find(d=>d.id==='bonus')]:DECISIONS.filter(d=>d.id!=='bonus'||D.method==='dealer'||D.method==='cu'||true);
+  const chosen=pool.slice().sort(()=>Math.random()-.5).slice(0,3), used=new Set(), decAt={};
+  chosen.forEach(d=>{ let m=Math.floor(rand(d.when[0],d.when[1]+1)), k=0; while(used.has(m)&&k++<12) m=m%11+1; used.add(m); decAt[m]=d; });
+  const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const mm=modal(`<div class="eyebrow">Year one ${bus?'on the bus':'with your '+c.name}</div><h2>Fast-forwarding…</h2><div class="months">${MON.map((n,i)=>`<div class="mo" id="mo${i+1}"><b>${n}</b><span class="mc"></span><div class="evs"></div></div>`).join('')}</div>
+    <div id="dec" hidden></div><div class="bigrow"><span>Savings</span><b id="ySave">${fmt(G.cash)}</b></div><div class="mact"><button class="btn" id="ySkip">Skip to the report</button></div>`, true);
+  let mo=0, auto=false;
+  const runMonth=()=>{ mo++; let cost=bus?r.run:r.pay+r.ins*Y.insMul+Y.insUp+c.maint*rand(.6,1.4)+monthlyFuel(c)*1+toolCost(c), evs=[];
+    if(mo===hitMonth){ Y.issueHit=true; if(Y.covered){ evs.push({t:'🔧 '+c.issue.what+' · covered by warranty',good:1}); Y.warrantyPaid+=c.issue.cost; } else { cost+=c.issue.cost; evs.push({t:'🔧 '+c.issue.what+' · '+fmt(c.issue.cost)}); Y.joy--; } }
+    if(mo===ticketMonth){ cost+=150; Y.insUp+=25; evs.push({t:'📸 Speeding ticket · '+fmt(150)+', insurance +'+fmt(25)+'/mo'}); }
     if(mo===fenderMonth){ cost+=500; evs.push({t:'💥 Fender bender · '+fmt(500)+' deductible'}); }
-    EVENTS.filter(e=>e.p).forEach(e=>{ if(Math.random()<e.p){ if(e.gas){ gasMul=e.gas; evs.push({t:'⛽ '+e.what}); } else { cost+=e.cost; evs.push({t:(e.joy?'✨ ':'🛞 ')+e.what+' · '+fmt(e.cost), good:e.joy}); } } });
-    carSpent+=cost; const left=YOU.takeHome-YOU.living-cost; save+=left; if(save<0){ cc+=-save; save=0; } if(cc>0){ cc*=1.02; const payBack=Math.min(cc,Math.max(0,save-300)); cc-=payBack; save-=payBack; }
-    months.push({mo, cost, evs, save, cc}); }
-  const value=Math.round(D.price*(1-c.dep)), months12=D.method==='lease'?0:12, bal=D.method==='lease'||D.method==='cash'?0:loanBalance(r.loan,r.apr,r.n,months12), equity=D.method==='lease'?0:value-bal;
-  const avg=(carSpent-r.upfront)/12, pct=avg/YOU.takeHome, interest12=D.method==='dealer'||D.method==='cu'?interestPaid(r.loan,r.apr,r.n,12):0;
-  const Y=G.year={months, save, cc, carSpent, avg, pct, value, bal, equity, interest12, issueHit, covered, warrantyPaid, joy};
-  const mm=modal(`<div class="eyebrow">Year one with your ${c.name}</div><h2>Fast-forwarding…</h2><div class="months">${months.map(x=>`<div class="mo" id="mo${x.mo}"><b>${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][x.mo-1]}</b>${fmt(x.cost)} car costs${x.evs.map(e=>`<div class="${e.good?'gd':'ev'}">${e.t}</div>`).join('')}</div>`).join('')}</div><div class="bigrow"><span>Savings</span><b id="ySave">${fmt(G.cash)}</b></div><div class="mact"><button class="btn" id="ySkip">Skip</button></div>`, true);
-  let i=0; const step=()=>{ if(i>=months.length) return report(); const x=months[i++]; const e=mm.querySelector('#mo'+x.mo); if(e) e.classList.add('on'); mm.querySelector('#ySave').textContent=fmt(x.save)+(x.cc>0?' · card debt '+fmt(x.cc):''); x.evs.length&&!x.evs[0].good?sfx.bad():sfx.tick(); G.yT=setTimeout(step, x.evs.length?1200:650); };
-  mm.querySelector('#ySkip').onclick=()=>{ clearTimeout(G.yT); report(); }; G.yT=setTimeout(step,500); }
-function loanBalance(P,apr,n,k){ if(!P) return 0; const r=apr/12, p=pmt(P,apr,n); let b=P; for(let i=0;i<k;i++){ b=b*(1+r)-p; } return Math.max(0,b); }
-function interestPaid(P,apr,n,k){ if(!P) return 0; const r=apr/12, p=pmt(P,apr,n); let b=P, t=0; for(let i=0;i<k;i++){ const it=b*r; t+=it; b=b+it-p; } return t; }
-function report(){ clearTimeout(G.yT); const D=G.deal, c=D.c, Y=G.year, I=info(c.id);
+    Y.risks.filter(k=>k.mo===mo).forEach(k=>{ cost+=k.cost; if(k.ins) Y.insUp+=k.ins; evs.push({t:'⚠️ '+k.what+' · '+fmt(k.cost)}); });
+    if(bus){ if(!PROFILE.busOk && Math.random()<.3){ Y.lateShifts++; cost+=90; evs.push({t:'🚌 Bus ran late, lost a shift · '+fmt(90)}); } else if(Math.random()<.12) evs.push({t:'🎧 Read two books on the bus',good:1}); }
+    else EVENTS.filter(e=>e.p).forEach(e=>{ if(Math.random()<e.p){ if(e.gas){ cost+=monthlyFuel(c)*(e.gas-1); evs.push({t:'⛽ '+e.what}); } else { cost+=e.cost; evs.push({t:(e.joy?'✨ ':'🛞 ')+e.what+' · '+fmt(e.cost), good:e.joy}); } } });
+    Y.carSpent+=cost; Y.save+=YOU.takeHome-YOU.living-cost; settle();
+    Y.months.push({mo, cost, evs}); const e=mm.querySelector('#mo'+mo); if(e){ e.classList.add('on'); e.querySelector('.mc').textContent=fmt(cost); e.querySelector('.evs').innerHTML=evs.map(x=>`<div class="${x.good?'gd':'ev'}">${x.t}</div>`).join(''); if(evs.some(x=>!x.good)) e.classList.add('hit'); }
+    showSave(); evs.length&&!evs[0].good?sfx.bad():sfx.tick(); };
+  const settle=()=>{ if(Y.save<0){ Y.cc+=-Y.save; Y.save=0; } if(Y.cc>0){ Y.cc*=1.02; const pay=Math.min(Y.cc,Math.max(0,Y.save-300)); Y.cc-=pay; Y.save-=pay; } };
+  const showSave=()=>{ const el=mm.querySelector('#ySave'); if(el){ el.textContent=fmt(Y.save)+(Y.cc>0?' · card debt '+fmt(Y.cc):''); el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); } };
+  const ask=d=>{ const box=mm.querySelector('#dec'); box.hidden=false; Y.asked++; sfx.tick();
+    box.innerHTML=`<div class="eyebrow">${MON[mo]} · your call</div><p class="q">${d.q}</p><div class="decb">${d.a.map((a,i)=>{ const dis=a.fx.needsLoan&&!(D.method==='dealer'||D.method==='cu'); return `<button class="btn ${i?'':'pri'}" data-i="${i}" ${dis?'disabled title="No loan to pay down"':''}>${a.t}</button>`; }).join('')}</div>`;
+    box.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{ const a=d.a[+b.dataset.i], f=a.fx; if(d.best&&d.best.includes(+b.dataset.i)) Y.good++;
+      if(f.insMul) Y.insMul*=f.insMul; if(f.cost){ Y.save-=f.cost; Y.carSpent+=f.cost; } if(f.joy) Y.joy+=f.joy; if(f.save) Y.save+=f.save; if(f.extraPay){ Y.extra+=f.extraPay; Y.extraMo=mo+1; Y.save-=f.extraPay; }
+      if(f.risk && Math.random()<f.risk.p){ Y.risks.push({mo:Math.min(12,mo+1+Math.floor(rand(0,3))), cost:f.risk.cost, what:f.risk.what, ins:f.risk.ins}); }
+      Y.lessons.push(a.lesson); note(a.lesson); settle(); showSave(); box.innerHTML=`<p class="q">${a.msg}</p>`; sfx.good(); setTimeout(()=>{ box.hidden=true; G.yT=setTimeout(step,300); },900); }); };
+  const step=()=>{ if(mo>=12) return finish(); if(!auto&&decAt[mo+1]&&!decAt[mo+1].done){ decAt[mo+1].done=1; return ask(decAt[mo+1]); } runMonth(); G.yT=setTimeout(step, Y.months[mo-1].evs.length?1100:600); };
+  const finish=()=>{ const own=!(bus||D.method==='lease'), loan=D.method==='dealer'||D.method==='cu';
+    Object.assign(Y,{ value:own?Math.round(D.price*(1-c.dep)):0, bal:loan?loanBalance(r.loan,r.apr,r.n,12,Y.extra,Y.extraMo):0, interest12:loan?interestPaid(r.loan,r.apr,r.n,12,Y.extra,Y.extraMo):0 });
+    Y.equity=own?Y.value-Y.bal:0; Y.avg=(Y.carSpent-r.upfront)/12; Y.pct=Y.avg/YOU.takeHome; report(); };
+  mm.querySelector('#ySkip').onclick=()=>{ clearTimeout(G.yT); auto=true; mm.querySelector('#dec').hidden=true; while(mo<12) runMonth(); finish(); };
+  G.yT=setTimeout(step,500); }
+function loanBalance(P,apr,n,k,x=0,xm=0){ if(!P) return 0; const r=apr/12, p=pmt(P,apr,n); let b=P; for(let i=1;i<=k;i++){ b=b*(1+r)-p; if(i===xm) b-=x; } return Math.max(0,b); }
+function interestPaid(P,apr,n,k,x=0,xm=0){ if(!P) return 0; const r=apr/12, p=pmt(P,apr,n); let b=P, t=0; for(let i=1;i<=k;i++){ const it=b*r; t+=it; b=b+it-p; if(i===xm) b-=x; } return t; }
+function report(){ clearTimeout(G.yT); const D=G.deal, c=D.c, Y=G.year, I=info(c.id), bus=D.method==='bus';
   let score=100; const pctOver=Math.max(0,Y.pct-GOOD_PCT); score-=pctOver*500; if(Y.cc>0) score-=12+Y.cc/150; if(Y.save<1000) score-=12; score-=(D.addList||[]).filter(a=>a!=='warranty').length*4; score-=Y.interest12/120; if(Y.equity<0) score-=8; if(c.issue&&Y.issueHit&&!Y.covered&&!I.inspected) score-=8;
-  score+=(I.inspected||!c.used?4:0)+(I.fair?3:0)+(G.preapproved&&D.method==='cu'?5:0)+Math.min(8,(D.saved/c.price)*60)+c.fun*1.2; if(Y.pct>GOOD_PCT) score=Math.min(score,84); if(Y.cc>0) score=Math.min(score,74); score=clamp(Math.round(score),0,100);
+  score+=(bus||I.inspected||!c.used?4:0)+(bus||I.fair?3:0)+(G.preapproved&&D.method==='cu'?5:0)+(bus?4:Math.min(8,(D.saved/c.price)*60))+Math.max(0,Y.joy)*1.2+Y.good*2;
+  if(bus&&!PROFILE.busOk) score-=14; if(bus) score=Math.min(score,88); if(PROFILE.needsCargo&&!bus&&!c.cargo) score-=6;
+  if(Y.pct>GOOD_PCT) score=Math.min(score,84); if(Y.cc>0) score=Math.min(score,74); score=clamp(Math.round(score),0,100);
   const grade=score>=93?'A+':score>=85?'A':score>=78?'B':score>=70?'C':score>=60?'D':'F', gc=grade[0]==='A'||grade==='B'?'':grade==='C'||grade==='D'?'c':'f';
-  const B=[[I.inspected||!c.used,'Got it inspected'],[I.fair,'Checked the fair price'],[D.saved>0,'Negotiated '+(D.saved>0?fmt(D.saved)+' off':'')],[G.preapproved,'Got pre-approved'],[!(D.addList||[]).some(a=>a!=='warranty'),'Said no to junk add-ons'],[Y.pct<=GOOD_PCT,'Stayed under 15%'],[Y.cc===0,'No credit card debt']];
-  const lessons=[]; if(Y.pct>GOOD_PCT) lessons.push('Your car took <b>'+Math.round(Y.pct*100)+'%</b> of your take-home pay. Over 15% squeezes everything else: savings, fun, emergencies.');
-  if(Y.interest12>0) lessons.push('You paid <b>'+fmt(Y.interest12)+'</b> in interest this year'+(D.method==='dealer'&&G.preapproved?' at the dealer\'s rate, even though your credit union offered less':'')+'.');
+  const B=bus?[[true,'Considered no car at all'],[Y.pct<=GOOD_PCT,'Stayed under 15%'],[Y.cc===0,'No credit card debt'],...(Y.asked?[[Y.good>=2,'Made smart choices']]:[])]
+    :[[I.inspected||!c.used,'Got it inspected'],[I.fair,'Checked the fair price'],[D.saved>0,'Negotiated '+(D.saved>0?fmt(D.saved)+' off':'')],[G.preapproved,'Got pre-approved'],[!(D.addList||[]).some(a=>a!=='warranty'),'Said no to junk add-ons'],[Y.pct<=GOOD_PCT,'Stayed under 15%'],[Y.cc===0,'No credit card debt'],...(Y.asked?[[Y.good>=2,'Made smart choices']]:[])];
+  const lessons=[]; if(Y.pct>GOOD_PCT) lessons.push('Your '+(bus?'transportation':'car')+' took <b>'+Math.round(Y.pct*100)+'%</b> of your take-home pay. Over 15% squeezes everything else: savings, fun, emergencies.');
+  if(bus) lessons.push(PROFILE.busOk?'The bus cost <b>'+fmt(Y.avg)+'/month</b>. For a lot of people the smartest first car is no car, until savings are strong.':'The bus was cheap, but it cost you time: about 140 extra minutes a day'+(Y.lateShifts?' and '+Y.lateShifts+' lost shifts':'')+'. Time is part of the price too.');
+  if(Y.interest12>0) lessons.push('You paid <b>'+fmt(Y.interest12)+'</b> in interest this year'+(D.method==='dealer'&&G.preapproved?' at the dealer\'s rate, even though your credit union offered less':'')+(Y.extra?'. Your extra '+fmt(Y.extra)+' payment cut that':'')+'.');
   if(Y.equity<0) lessons.push('You owe <b>'+fmt(Y.bal)+'</b> but the car is only worth <b>'+fmt(Y.value)+'</b>. That\'s called being "underwater" on a loan.');
   if(Y.issueHit&&!Y.covered) lessons.push('The '+c.issue.what.toLowerCase()+' cost '+fmt(c.issue.cost)+'. '+(I.inspected?'At least you saw it coming.':'A '+fmt(INSPECT_FEE)+' inspection would have warned you.'));
+  if(PROFILE.needsCargo&&!bus&&!c.cargo) lessons.push('Van rentals for your tools added '+fmt(toolCost(c)*12)+' this year. The right car for <b>your</b> life matters more than the coolest one.');
   if(Y.cc>0) lessons.push('An emergency went on a credit card at 24% APR. Keeping an emergency fund avoids that.');
   if(D.method==='lease') lessons.push('Leasing gave you a new car with a lower payment, but after 3 years you own nothing and start over.');
   if(!lessons.length) lessons.push('You bought a car you can actually afford and still kept saving. That\'s rarer than it sounds.');
-  modal(`<div class="eyebrow">Your first year · ${c.year} ${c.name}</div><div style="display:flex;gap:22px;align-items:center;flex-wrap:wrap"><div class="grade ${gc}">${grade}</div><div><h2 style="margin:0">Car money report card</h2><p style="margin:4px 0 0">Score ${score}/100</p></div></div>
-   <div class="specs" style="grid-template-columns:repeat(3,1fr)"><div><em>Spent on the car</em><b>${fmt(Y.carSpent)}</b></div><div><em>Average per month</em><b>${fmt(Y.avg)}</b></div><div><em>Savings now</em><b>${fmt(Y.save)}</b></div>
-    <div><em>Car is worth</em><b>${D.method==='lease'?'Leased':fmt(Y.value)}</b></div><div><em>Still owed</em><b>${fmt(Y.bal)}</b></div><div><em>Card debt</em><b style="color:${Y.cc?'var(--red)':''}">${fmt(Y.cc)}</b></div></div>
-   <div style="font-size:13px;color:var(--txt3)">Car costs as a share of take-home pay</div><div class="cmpbar"><i style="width:${Math.min(100,Y.pct*250)}%;background:${Y.pct<=GOOD_PCT?'var(--green)':'var(--red)'}"></i><em style="left:${GOOD_PCT*250}%"></em><span style="left:${GOOD_PCT*250}%">15% goal</span><span style="left:${Math.min(96,Y.pct*250)}%">${Math.round(Y.pct*100)}%</span></div>
+  const best=store.get('best_'+PROFILE.id,0), isBest=score>best; if(isBest) store.set('best_'+PROFILE.id,score); G.best=Math.max(G.best||0,score);
+  modal(`<div class="eyebrow">${YOU.name}'s first year · ${bus?'Bus pass':c.year+' '+c.name}</div><div style="display:flex;gap:22px;align-items:center;flex-wrap:wrap"><div class="grade stamp ${gc}">${grade}</div><div><h2 style="margin:0">${bus?'Transportation':'Car money'} report card</h2><p style="margin:4px 0 0">Score ${score}/100${isBest?' · <b style="color:var(--gold)">New best for '+YOU.name+'!</b>':best?' · Best: '+best:''}</p></div></div>
+   <div class="specs" style="grid-template-columns:repeat(3,1fr)"><div><em>Spent ${bus?'getting around':'on the car'}</em><b>${fmt(Y.carSpent)}</b></div><div><em>Average per month</em><b>${fmt(Y.avg)}</b></div><div><em>Savings now</em><b>${fmt(Y.save)}</b></div>
+    <div><em>Car is worth</em><b>${bus?'No car':D.method==='lease'?'Leased':fmt(Y.value)}</b></div><div><em>Still owed</em><b>${fmt(Y.bal)}</b></div><div><em>Card debt</em><b style="color:${Y.cc?'var(--red)':''}">${fmt(Y.cc)}</b></div></div>
+   <div style="font-size:13px;color:var(--txt3)">${bus?'Getting around':'Car costs'} as a share of take-home pay</div><div class="cmpbar"><i style="width:${Math.min(100,Y.pct*250)}%;background:${Y.pct<=GOOD_PCT?'var(--green)':'var(--red)'}"></i><em style="left:${GOOD_PCT*250}%"></em><span style="left:${GOOD_PCT*250}%">15% goal</span><span style="left:${Math.min(96,Y.pct*250)}%">${Math.round(Y.pct*100)}%</span></div>
    <div class="badges">${B.map(([ok,t])=>`<span class="${ok?'':'no'}">${ok?'✓':'✗'} ${t}</span>`).join('')}</div>
    ${lessons.map(l=>`<div class="lesson">${l}</div>`).join('')}
-   <div class="mact"><button class="btn" id="rpNotes">📒 What I learned</button><button class="btn pri" id="rpAgain">Shop again with a different car</button></div>`, true);
-  $('#hSave').textContent=fmt(Y.save); G.best=Math.max(G.best||0,score); $('#rpAgain').onclick=resetRun; $('#rpNotes').onclick=()=>$('#btnNotes').onclick(); }
-function resetRun(){ closeModal(); G.cash=YOU.savings; G.deal=null; G.year=null; G.preapproved=false; G.habits=null; for(const k in G.known){ G.known[k].inspected=false; G.known[k].found=false; } G.you.root.position.set(0,0,10); hud(); startLot(false); advise('Same paycheck, same savings. Can you beat a score of <b>'+G.best+'</b>?'); }
+   ${Y.lessons.length?`<div class="eyebrow" style="margin-top:14px">Your choices this year</div><ul class="notes">${Y.lessons.map(l=>'<li>'+l+'</li>').join('')}</ul>`:''}
+   <div class="mact"><button class="btn" id="rpNotes">📒 What I learned</button><button class="btn" id="rpLife">Try a different life</button><button class="btn pri" id="rpAgain">Shop again as ${YOU.name}</button></div>`, true);
+  G.cash=Y.save; hud(); setTimeout(()=>{ sfx.thud(); shake=0; if(gc==='') confetti(); else sfx.bad(); },380);
+  $('#rpAgain').onclick=resetRun; $('#rpNotes').onclick=()=>$('#btnNotes').onclick(); $('#rpLife').onclick=pickLife; }
+function resetRun(){ closeModal(); clearConfetti(); G.cash=YOU.savings; G.deal=null; G.year=null; G.preapproved=false; G.habits=null; for(const k in G.known){ G.known[k].inspected=false; G.known[k].found=false; } G.you.root.position.set(0,0,10); hud(); startLot(false); advise('Same paycheck, same savings. Can you beat a score of <b>'+G.best+'</b>?'); }
 
 /* ---------- main loop ---------- */
 function loop(){ requestAnimationFrame(loop); const dt=Math.min(.05,clock.getDelta()); G.t+=dt; const t=G.t;
-  W.anim.forEach(f=>f(t)); [G.you,G.slick,G.mech,G.cuBot,G.mb].forEach(r=>r&&r.mixer.update(dt));
+  W.anim.forEach(f=>f(t)); [G.you,G.slick,G.mech,G.cuBot,G.mb].forEach(r=>r&&r.mixer.update(dt)); plusTick(dt,t);
   if(G.mode==='title'){ const a=t*.08; camera.position.set(Math.cos(a)*38,22,Math.sin(a)*38+4); camera.lookAt(0,0,0); }
   else if(G.mode==='lot') lotTick(dt);
   else if(G.mode==='drive') driveTick(dt);
   else if(G.mode==='office'){ camera.position.x+=(8.5-camera.position.x)*dt*3; camera.position.y+=(3.6-camera.position.y)*dt*3; camera.position.z+=(-17.6-camera.position.z)*dt*3; camera.lookAt(3.8,1.1,-22.5); }
   scene.traverseVisible?0:0; for(const g of W.lotCars.values()){ const tg=g.userData.tag; if(tg) tg.lookAt(camera.position.x, tg.position.y, camera.position.z); }
   renderer.render(scene,camera); }
-boot().catch(e=>{ console.error(e); $('#btnStart').textContent='Could not load'; });

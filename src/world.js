@@ -50,6 +50,7 @@ const STYLES={
 function profileGeo(pts, depth, bevel){ const s=new THREE.Shape(); pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y)); s.closePath();
   const g=new THREE.ExtrudeGeometry(s,{depth, bevelEnabled:true, bevelThickness:bevel, bevelSize:bevel, bevelSegments:3, curveSegments:6}); g.translate(0,0,-depth/2); g.computeVertexNormals(); return g; }
 const GLASS=new THREE.MeshStandardMaterial({color:'#0B1220', roughness:.08, metalness:.6, envMapIntensity:1});
+const PLATE=new THREE.MeshStandardMaterial({color:'#F8FAFC',roughness:.5}), SEAM=mat('#000',{roughness:1,transparent:true,opacity:.35}), ARCH=new THREE.TorusGeometry(1,.06,6,16,Math.PI);
 const TIRE=mat('#111318',{roughness:.85}), RIM=mat('#CBD5E1',{metalness:.85, roughness:.25}), CHROME=mat('#E2E8F0',{metalness:.9, roughness:.18}), BLACK=mat('#0F172A',{roughness:.5});
 function makeCar(spec){
   const S=STYLES[spec.style], g=new THREE.Group(), body=new THREE.Group(); g.add(body);
@@ -64,6 +65,7 @@ function makeCar(spec){
   const bp=new THREE.Mesh(BOX,paint); bp.scale.set(.1,top-S.cab[0][1]+.02,S.W*.86); const a=S.cab[1], b=S.cab[0]; bp.position.set((a[0]+b[0])/2,(a[1]+b[1])/2,0); bp.rotation.z=Math.atan2(a[1]-b[1],a[0]-b[0])-Math.PI/2; body.add(bp);
   if(spec.style==='truck'){ const bed=new THREE.Mesh(BOX,BLACK); bed.scale.set(2.9,.05,S.W-.3); bed.position.set(-1.25,1.14,0); body.add(bed); [[-1.25,S.W/2-.1],[-1.25,-S.W/2+.1]].forEach(([x,z])=>{ const w=new THREE.Mesh(BOX,paint); w.scale.set(2.95,.28,.08); w.position.set(x,1.25,z); body.add(w); }); const tg=new THREE.Mesh(BOX,paint); tg.scale.set(.08,.28,S.W-.2); tg.position.set(-2.72,1.25,0); body.add(tg); }
   /* lights, grille, mirrors */
+  const wx=S.L/2-(spec.style==='truck'?.95:.78), r=spec.style==='truck'?.44:.36;
   const front=S.low.reduce((m,p)=>p[0]>m[0]?p:m), back=S.low.reduce((m,p)=>p[0]<m[0]?p:m);
   const hl=mat('#FFFBEB',{emissive:'#FFF7D6', emissiveIntensity:.6, roughness:.2}), tl=mat('#7F1D1D',{emissive:'#EF4444', emissiveIntensity:.5, roughness:.3});
   [-1,1].forEach(s=>{ const h=new THREE.Mesh(BOX,hl); h.scale.set(.08,.12,.42); h.position.set(front[0]-.05,.66,s*(S.W/2-.32)); body.add(h);
@@ -72,13 +74,20 @@ function makeCar(spec){
   if(spec.style==='ev'){ const lb=new THREE.Mesh(BOX,hl); lb.scale.set(.06,.05,S.W-.4); lb.position.set(front[0]-.03,.78,0); body.add(lb); }
   else { const gr=new THREE.Mesh(BOX,spec.style==='truck'?CHROME:BLACK); gr.scale.set(.06,spec.style==='truck'?.36:.18,S.W*.42); gr.position.set(front[0]-.02,spec.style==='truck'?.72:.5,0); body.add(gr); }
   /* wheels */
-  const wheels=[], wx=S.L/2-(spec.style==='truck'?.95:.78), r=spec.style==='truck'?.44:.36;
+  const wheels=[];
   [[wx,1],[wx,-1],[-wx,1],[-wx,-1]].forEach(([x,s])=>{ const w=new THREE.Group(); const t=new THREE.Mesh(CYL,TIRE); t.scale.set(r,.26,r); t.rotation.x=Math.PI/2; t.castShadow=true; w.add(t); const rim=new THREE.Mesh(CYL,RIM); rim.scale.set(r*.62,.27,r*.62); rim.rotation.x=Math.PI/2; w.add(rim);
     w.position.set(x,r,s*(S.W/2-.1)); body.add(w); wheels.push(w); });
+  /* bumpers, skirts, plates, door seams */
+  const by=spec.style==='truck'?.5:.3;
+  [front[0]+.02, back[0]-.02].forEach((x,i)=>{ const b=new THREE.Mesh(BOX,BLACK); b.scale.set(.16,.2,S.W-.1); b.position.set(x,by+.06,0); body.add(b);
+    const pl=new THREE.Mesh(BOX,PLATE); pl.scale.set(.03,.17,.52); pl.position.set(x+(i?-.09:.09),by+.3,0); body.add(pl); });
+  [-1,1].forEach(s=>{ const k=new THREE.Mesh(BOX,BLACK); k.scale.set(S.L*.62,.1,.06); k.position.set(0,by+.04,s*(S.W/2-.03)); body.add(k);
+    const sm=new THREE.Mesh(BOX,SEAM); sm.scale.set(.02,.5,.02); sm.position.set(spec.style==='truck'?.2:-.15,.58+(spec.style==='truck'?.2:0),s*(S.W/2-.05)); body.add(sm);
+    [wx,-wx].forEach(x=>{ const arch=new THREE.Mesh(ARCH,BLACK); arch.scale.set(r*1.18,r*1.18,1); arch.position.set(x,r,s*(S.W/2-.06)); body.add(arch); }); });
   if(spec.id==='rattler'){ const rust=mat('#7C2D12',{roughness:1}); [[.6,.5,1],[-1.2,.42,-1],[1.3,.7,-1]].forEach(([x,y,s])=>{ const p=new THREE.Mesh(BOX,rust); p.scale.set(.5,.22,.02); p.position.set(x,y,s*(S.W/2-.03)); body.add(p); }); }
   body.rotation.y=-Math.PI/2;    /* length runs along +z, front at +z */
   const sh=blob(1); sh.scale.set(S.W+.9,S.L+.9,1); g.add(sh);
-  g.userData={spec, wheels, paint, len:S.L, wid:S.W, r}; return g;
+  g.userData={spec, wheels, paint, len:S.L, wid:S.W, r, tail:tl, head:hl}; return g;
 }
 
 /* ---------- world: lot, showroom, city loop ---------- */

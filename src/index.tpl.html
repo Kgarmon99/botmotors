@@ -17,10 +17,11 @@
     <img id="tLogo" alt="MoneyBot">
     <div class="eyebrow">A MoneyBot Original</div>
     <h1>Bot<span>Motors</span></h1>
-    <p>You just landed your first full-time job. Now you need a car to get there. Walk the lot, test drive anything, out-haggle Slick the salesbot, and find out what a car <b>really</b> costs.</p>
+    <p>Pick a life. Walk the lot, test drive anything, out-haggle Slick the salesbot, then live through year one and find out what a car <b>really</b> costs.</p>
+    <div class="lives" id="lives"></div>
     <div class="chips"><span>Car prices</span><span>Loans &amp; APR</span><span>Insurance</span><span>Negotiating</span><span>True cost of owning</span></div>
     <button class="btn pri big" id="btnStart" disabled>Loading…</button>
-    <small class="hint">WASD or arrow keys to move · tap to walk on touch screens</small>
+    <small class="hint">WASD or arrows to move · click to walk · H horn · M music</small>
   </div>
 </section>
 <!-- hud -->
@@ -30,7 +31,7 @@
   <div class="stat"><em>Take-home pay</em><b id="hPay">$0/mo</b></div>
   <div class="stat"><em>Credit score</em><b id="hCredit">670</b></div>
   <div class="stat goal"><em>Car budget (15%)</em><b id="hBudget">$360/mo</b></div>
-  <button class="btn ghost sm" id="btnNotes">📒 Notes</button>
+  <button class="btn ghost sm" id="btnMute" title="Music (M)">🎵</button><button class="btn ghost sm" id="btnNotes">📒 Notes</button>
 </header>
 <div id="prompt" hidden></div>
 <aside id="card" hidden></aside>
@@ -39,11 +40,11 @@
 <!-- drive hud -->
 <div id="dhud" hidden>
   <div class="spd"><b id="dMph">0</b><em>mph</em><small>Limit 35</small></div>
-  <div class="dinfo"><div><em>Checkpoints</em><b id="dCp">0/4</b></div><div><em>Time</em><b id="dTime">0:00</b></div><div><em>Bumps</em><b id="dBump">0</b></div></div>
+  <div class="dinfo"><div><em>Checkpoints</em><b id="dCp">0/4</b></div><div><em>Time</em><b id="dTime">0:00</b></div><div><em>Bumps</em><b id="dBump">0</b></div><div><em>Coins</em><b id="dCoin">0</b></div></div>
   <button class="btn ghost sm" id="btnEndDrive">End test drive</button>
 </div>
 <div id="pads" hidden><div class="l"><button data-k="left">◀</button><button data-k="right">▶</button></div><div class="r"><button data-k="brake">BRAKE</button><button data-k="gas">GAS</button></div></div>
-<div id="flash"></div>
+<div id="flash"></div><div id="speedfx"></div><canvas id="confetti"></canvas>
 <div id="modal" hidden><div id="modalCard"></div></div>
 <div id="toasts"></div>
 <script src="vendor/three/three.min.js"></script>
