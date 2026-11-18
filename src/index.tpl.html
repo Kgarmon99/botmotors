@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>BotMotors · A MoneyBot Game</title>
+<meta name="description" content="Buy your first car without getting played. A MoneyBot Original game about car prices, loans, insurance and the true cost of owning a car.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>/*CSS*/</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="fade"></div>
+<!-- title -->
+<section id="title">
+  <div class="tcard">
+    <img id="tLogo" alt="MoneyBot">
+    <div class="eyebrow">A MoneyBot Original</div>
+    <h1>Bot<span>Motors</span></h1>
+    <p>You just landed your first full-time job. Now you need a car to get there. Walk the lot, test drive anything, out-haggle Slick the salesbot, and find out what a car <b>really</b> costs.</p>
+    <div class="chips"><span>Car prices</span><span>Loans &amp; APR</span><span>Insurance</span><span>Negotiating</span><span>True cost of owning</span></div>
+    <button class="btn pri big" id="btnStart" disabled>Loading…</button>
+    <small class="hint">WASD or arrow keys to move · tap to walk on touch screens</small>
+  </div>
+</section>
+<!-- hud -->
+<header id="hud" hidden>
+  <div class="brand"><img id="hLogo" alt=""> <b>BotMotors</b></div>
+  <div class="stat"><em>Savings</em><b id="hSave">$0</b></div>
+  <div class="stat"><em>Take-home pay</em><b id="hPay">$0/mo</b></div>
+  <div class="stat"><em>Credit score</em><b id="hCredit">670</b></div>
+  <div class="stat goal"><em>Car budget (15%)</em><b id="hBudget">$360/mo</b></div>
+  <button class="btn ghost sm" id="btnNotes">📒 Notes</button>
+</header>
+<div id="prompt" hidden></div>
+<aside id="card" hidden></aside>
+<div id="advisor" class="hide"><img id="aLogo" alt=""><div><b id="aWho">MoneyBot</b><p id="aText"></p></div></div>
+<div id="slickSays" class="hide"><div class="face">😎</div><div><b>Slick</b><p></p></div></div>
+<!-- drive hud -->
+<div id="dhud" hidden>
+  <div class="spd"><b id="dMph">0</b><em>mph</em><small>Limit 35</small></div>
+  <div class="dinfo"><div><em>Checkpoints</em><b id="dCp">0/4</b></div><div><em>Time</em><b id="dTime">0:00</b></div><div><em>Bumps</em><b id="dBump">0</b></div></div>
+  <button class="btn ghost sm" id="btnEndDrive">End test drive</button>
+</div>
+<div id="pads" hidden><div class="l"><button data-k="left">◀</button><button data-k="right">▶</button></div><div class="r"><button data-k="brake">BRAKE</button><button data-k="gas">GAS</button></div></div>
+<div id="flash"></div>
+<div id="modal" hidden><div id="modalCard"></div></div>
+<div id="toasts"></div>
+<script src="vendor/three/three.min.js"></script>
+<script src="vendor/three/GLTFLoader.js"></script>
+<script src="vendor/three/SkeletonUtils.js"></script>
+<script src="moneybot-assets.js"></script>
+<script>/*JS*/</script>
+</body>
+</html>
