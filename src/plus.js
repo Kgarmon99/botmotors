@@ -80,7 +80,7 @@ function trafficTick(dt){ const D=G.drive, ps=D?nearestOnLoop(D.x,D.z):null;
     t.g.userData.tail.emissiveIntensity=t.v<t.v0*.7?2.5:.5; }); }
 function pedTick(dt,t){ W.peds.forEach(p=>{ p.s+=p.v*dt; const q=p.path.at(p.s); p.rig.root.position.set(q.x+(-q.dz)*.0,Math.abs(Math.sin(t*7+p.s))*.05,q.z); p.rig.root.rotation.y=Math.atan2(q.dx*Math.sign(p.v),q.dz*Math.sign(p.v)); p.rig.mixer.update(dt); });
   if(G.mode!=='lot'&&G.mode!=='title') return;
-  W.shop.forEach(s=>{ const r=s.rig.root, dx=s.tx-r.position.x, dz=s.tz-r.position.z, d=Math.hypot(dx,dz);
+  W.shop.forEach(s=>{ s.rig.root.visible=!G.dealer; if(G.dealer) return; const r=s.rig.root, dx=s.tx-r.position.x, dz=s.tz-r.position.z, d=Math.hypot(dx,dz);
     if(d>.2){ r.position.x+=dx/d*2.2*dt; r.position.z+=dz/d*2.2*dt; r.rotation.y=Math.atan2(dx,dz); r.position.y=Math.abs(Math.sin(G.t*9))*.05; }
     else { s.wait-=dt; r.position.y=0; if(s.wait<0){ const ids=[...W.lotCars.keys()], c=W.lotCars.get(pick(ids)); s.tx=c.position.x+rand(-1.6,1.6); s.tz=c.position.z+(c.position.z<0?3:-3); s.wait=rand(3,7); if(Math.random()<.5) rigPlay(s.rig,pick(['UpPoint','LeftHand']),true); } }
     s.rig.mixer.update(dt); }); }
@@ -88,7 +88,7 @@ function pedTick(dt,t){ W.peds.forEach(p=>{ p.s+=p.v*dt; const q=p.path.at(p.s);
 /* ---------- lot juice: hover, click marker, footstep dust, car chirps ---------- */
 let hoverCar=null, hoverN=0;
 $('#gl').addEventListener('pointermove',e=>{ if(G.mode!=='lot'||G.modal||MOBILE||(hoverN++%2)) return; ndc.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1); ray.setFromCamera(ndc,camera);
-  const hits=ray.intersectObjects([...W.lotCars.values()],true); let o=hits.length?hits[0].object:null; while(o&&!o.userData.spec) o=o.parent; const id=o?o.userData.spec.id:null;
+  const hits=ray.intersectObjects([...W.lotCars.values()].filter(g=>g.visible),true); let o=hits.length?hits[0].object:null; while(o&&!o.userData.spec) o=o.parent; const id=o?o.userData.spec.id:null;
   if(id!==hoverCar){ if(hoverCar){ const g=W.lotCars.get(hoverCar); g.userData.paint.emissive.set('#000'); } hoverCar=id; $('#gl').style.cursor=id?'pointer':''; if(id){ W.lotCars.get(id).userData.paint.emissive.set('#1F2937'); tone(1200,.04,'sine',.015); } } });
 $('#gl').addEventListener('pointerdown',()=>{ setTimeout(()=>{ if(G.walkTo&&W.marker){ W.marker.position.set(G.walkTo.x,.05,G.walkTo.z); W.marker.visible=true; W.marker.userData.t=0; } },0); });
 let dustT=0; const chirps=[];
@@ -137,7 +137,7 @@ function updMute(){ const b=$('#btnMute'); if(b) b.textContent=MUS.on?'ðŸŽµ':'ðŸ
 $('#btnMute').onclick=()=>{ audio(); musicStart(); toggleMusic(); };
 
 /* ---------- Slick's pressure tactics ---------- */
-function startTactic(N){ const opts=['rival','manager']; if(!G.preapproved||true) opts.push('payment'); N.tactic=pick(opts); const L=SLICK.tactics[N.tactic]; N.hist.unshift('<b>Slick:</b> '+L); slick(L,6000); sfx.bad();
+function startTactic(N){ setTimeout(()=>proSpot(N.tactic==='rival'?'urgency':N.tactic==='manager'?'manager':'payment_pack'),50); const opts=['rival','manager']; if(!G.preapproved||true) opts.push('payment'); N.tactic=pick(opts); const L=SLICK.tactics[N.tactic]; N.hist.unshift('<b>Slick:</b> '+L); slick(L,6000); sfx.bad();
   if(N.tactic==='manager'){ N.waiting=true; renderNeg(); const s=G.slick.root, home=s.position.clone(); s.position.set(9,0,-24); setTimeout(()=>{ if(G.neg!==N) return; s.position.copy(home); N.waiting=false; const drop=Math.min(N.ask-N.c.floor, Math.round(rand(150,350)/50)*50); N.ask-=drop; const L2='Good news! My manager says I can do '+fmt(N.ask)+'. He NEVER does this.'; N.hist.unshift('<b>Slick:</b> '+L2); slick(L2); note('"Let me ask my manager" is often theater. It makes a small discount feel like a big win.'); N.tDone=true; sfx.tick(); renderNeg(); },2600); return; }
   renderNeg(); }
 function tacticBox(N){ if(N.tDone) return '';
@@ -160,11 +160,10 @@ function clearConfetti(){ cancelAnimationFrame(CONF); const cv=$('#confetti'); c
 
 /* ---------- per-frame extras ---------- */
 let cashShown=null;
-function plusTick(dt,t){ trafficTick(dt); pedTick(dt,t); fxTick(dt); chirpTick(dt);
+function plusTick(dt,t){ storyTick(dt); trafficTick(dt); pedTick(dt,t); fxTick(dt); chirpTick(dt);
   const fov=G.mode==='drive'?G.fov:50; if(Math.abs(camera.fov-fov)>.05){ camera.fov+=(fov-camera.fov)*Math.min(1,dt*3); camera.updateProjectionMatrix(); }
   if(cashShown==null) cashShown=G.cash; if(Math.abs(cashShown-G.cash)>.5){ const up=G.cash>cashShown; cashShown+=(G.cash-cashShown)*Math.min(1,dt*7); if(Math.abs(cashShown-G.cash)<1) cashShown=G.cash; const e=$('#hSave'); e.textContent=fmt(cashShown); e.className=up?'up':'down'; } else $('#hSave').className=''; }
 /* hud() writes the cash instantly; let the tween own it instead */
 const _hud=hud; hud=function(){ _hud(); if(cashShown!=null) $('#hSave').textContent=fmt(cashShown); };
 document.addEventListener('click',e=>{ if(e.target.closest&&e.target.closest('.btn,.terms button,.life')) tone(700,.03,'sine',.012); },true);
 
-boot().catch(e=>{ console.error(e); $('#btnStart').textContent='Could not load'; });

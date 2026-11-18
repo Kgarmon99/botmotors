@@ -45,7 +45,7 @@ async function boot(){
   G.mb=makeRig(GLTF.hero, MB.hero, 1.0,'g'); G.mb.root.position.set(-1.5,1.4,10); scene.add(G.mb.root);
   livePlus();
   camera.position.set(30,24,34); camera.lookAt(0,0,0);
-  $('#btnStart').disabled=false; $('#btnStart').textContent='Start shopping';
+  $('#btnStart').disabled=false; $('#btnStart').textContent='Free play'; if($('#btnStory')) $('#btnStory').disabled=false;
   requestAnimationFrame(loop);
 }
 $('#btnStart').onclick=()=>{ audio(); musicStart(); applyProfile(PICK); $('#title').hidden=true; G.you.root.position.set(0,0,10); hud(); startLot(true); };
@@ -59,7 +59,7 @@ addEventListener('keyup',e=>G.keys.delete(e.key.toLowerCase()));
 addEventListener('blur',()=>G.keys.clear());
 const ray=new THREE.Raycaster(), ndc=new THREE.Vector2(), ground=new THREE.Plane(new THREE.Vector3(0,1,0),0);
 $('#gl').addEventListener('pointerdown',e=>{ audio(); if(G.mode!=='lot'||G.modal) return; ndc.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1); ray.setFromCamera(ndc,camera);
-  const hits=ray.intersectObjects([...W.lotCars.values()],true); if(hits.length){ let o=hits[0].object; while(o&&!o.userData.spec) o=o.parent; if(o){ G.walkTo={x:o.position.x, z:o.position.z+(o.position.z<0?3.2:-3.2), car:o.userData.spec.id}; return; } }
+  const hits=ray.intersectObjects([...W.lotCars.values()].filter(g=>g.visible),true); if(hits.length){ let o=hits[0].object; while(o&&!o.userData.spec) o=o.parent; if(o){ G.walkTo={x:o.position.x, z:o.position.z+(o.position.z<0?3.2:-3.2), car:o.userData.spec.id}; return; } }
   const p=new THREE.Vector3(); if(ray.ray.intersectPlane(ground,p)) G.walkTo={x:p.x, z:p.z}; });
 $$('#pads button').forEach(b=>{ const k=b.dataset.k; b.addEventListener('pointerdown',e=>{ e.preventDefault(); G.pad[k]=1; }); ['pointerup','pointerleave','pointercancel'].forEach(ev=>b.addEventListener(ev,()=>G.pad[k]=0)); });
 $('#btnNotes').onclick=()=>{ const n=G.notes.length?G.notes:['Nothing yet. Inspect a car, check a fair price, or talk to the credit union.']; modal(`<button class="x" onclick="closeModal()">×</button><div class="eyebrow">Your notes</div><h2>What you've learned</h2><ul class="notes">${n.map(x=>'<li>'+x+'</li>').join('')}</ul>`); };
@@ -70,13 +70,13 @@ function lotTick(dt){
   if(k.has('w')||k.has('arrowup')) mz-=1; if(k.has('s')||k.has('arrowdown')) mz+=1; if(k.has('a')||k.has('arrowleft')) mx-=1; if(k.has('d')||k.has('arrowright')) mx+=1;
   if(mx||mz) G.walkTo=null; else if(G.walkTo){ const dx=G.walkTo.x-r.position.x, dz=G.walkTo.z-r.position.z, d=Math.hypot(dx,dz); if(d<.3){ const c=G.walkTo.car; G.walkTo=null; if(c){ openCard(c); } } else { mx=dx/d; mz=dz/d; } }
   const L=Math.hypot(mx,mz); if(L>0 && !G.modal && $('#card').hidden){ mx/=L; mz/=L; const sp=6.2*dt, nx=r.position.x+mx*sp, nz=r.position.z+mz*sp;
-    const blocked=[...W.lotCars.values()].some(g=>Math.abs(nx-g.position.x)<1.25 && Math.abs(nz-g.position.z)<2.6);
+    const blocked=[...W.lotCars.values()].some(g=>g.visible&&Math.abs(nx-g.position.x)<1.25 && Math.abs(nz-g.position.z)<2.6);
     if(!blocked && nx>LOT.x0+.6 && nx<LOT.x1-.6 && nz>LOT.z0+.8 && nz<LOT.z1-.4){ r.position.x=nx; r.position.z=nz; }
     r.rotation.y=Math.atan2(mx,mz); r.position.y=Math.abs(Math.sin(G.t*11))*.05; if(G.you.cur!=='Idle') rigPlay(G.you,'Idle'); }
   /* nearest car / kiosk */
-  let best=null, bd=4.2; for(const [id,g] of W.lotCars){ const d=Math.hypot(g.position.x-r.position.x, g.position.z-r.position.z); if(d<bd){ bd=d; best=id; } }
-  if(Math.hypot(W.cu.x-r.position.x, W.cu.z-r.position.z)<4.2) best='@cu'; if(Math.hypot(W.mech.x-r.position.x, W.mech.z+3-r.position.z)<4.5) best='@mech'; if(Math.hypot(W.bus.x-r.position.x, W.bus.z-r.position.z)<4) best='@bus';
-  if(best!==G.near){ G.near=best; const p=$('#prompt'); if(best && $('#card').hidden){ p.hidden=false; p.innerHTML=(MOBILE?'Tap to ':'<kbd>E</kbd> ')+(best==='@cu'?'Talk to the credit union':best==='@mech'?'Talk to Mike the mechanic':best==='@bus'?'Check the bus schedule':'Look at the '+carById(best).name); p.onclick=()=>openCard(best); } else p.hidden=true; if(best && best[0]!=='@'){ chirp(best); if(Math.random()<.5) slick(pick(SLICK.pitch[best])); } }
+  let best=null, bd=4.2; for(const [id,g] of W.lotCars){ if(!g.visible) continue; const d=Math.hypot(g.position.x-r.position.x, g.position.z-r.position.z); if(d<bd){ bd=d; best=id; } }
+  if(Math.hypot(W.cu.x-r.position.x, W.cu.z-r.position.z)<4.2) best='@cu'; if(Math.hypot(W.mech.x-r.position.x, W.mech.z+3-r.position.z)<4.5) best='@mech'; if(Math.hypot(W.bus.x-r.position.x, W.bus.z-r.position.z)<4) best='@bus'; best=nearHook(r,best);
+  if(best!==G.near){ G.near=best; const p=$('#prompt'); if(best && $('#card').hidden){ p.hidden=false; p.innerHTML=(MOBILE?'Tap to ':'<kbd>E</kbd> ')+(nearLabel(best)||(best==='@cu'?(G.dealer?'Visit BotBank':'Talk to the credit union'):best==='@mech'?'Talk to Mike the mechanic':best==='@bus'?'Check the bus schedule':(G.dealer?'Set the price on the ':'Look at the ')+carById(best).name)); p.onclick=()=>openCard(best); } else p.hidden=true; if(best && best[0]!=='@'){ chirp(best); if(!G.dealer&&Math.random()<.5) slick(pick(SLICK.pitch[best])); } }
   /* Slick drifts toward you; MoneyBot hovers nearby */
   const s=G.slick.root, tx=r.position.x+2.2, tz=r.position.z-1.4, dd=Math.hypot(tx-s.position.x,tz-s.position.z); if(dd>3){ s.position.x+=(tx-s.position.x)/dd*4.2*dt; s.position.z+=(tz-s.position.z)/dd*4.2*dt; s.rotation.y=Math.atan2(tx-s.position.x,tz-s.position.z); } else s.rotation.y=Math.atan2(r.position.x-s.position.x,r.position.z-s.position.z);
   const m=G.mb.root; m.position.x+=(r.position.x-1.6-m.position.x)*dt*1.5; m.position.z+=(r.position.z+.8-m.position.z)*dt*1.5; m.position.y=1.5+Math.sin(G.t*2)*.12; m.rotation.y=Math.atan2(camera.position.x-m.position.x,camera.position.z-m.position.z);
@@ -89,6 +89,7 @@ function lotTick(dt){
 /* ---------- car card ---------- */
 function monthlyFuel(c){ return c.fuel==='electric' ? YOU.milesMonth*KWH_MILE : YOU.milesMonth/c.mpg*(c.fuel==='premium'?PREMIUM:GAS); }
 function openCard(id){ G.walkTo=null; $('#prompt').hidden=true;
+  if(id.startsWith('@c')&&id!=='@cu'&&G.dealer) return custCard(id.slice(2)); if(G.dealer) return dealerCard(id);
   if(id==='@cu') return creditUnion(); if(id==='@mech') return mechanic(); if(id==='@bus') return busStop();
   const c=carById(id), I=info(id), fuel=monthlyFuel(c), estPay=pmt(c.price*(1+TAX)+DOC_FEE+TITLE_FEE-1500, c.used?RATES.dealer.used:RATES.dealer.new, 60), ins=c.ins+(c.ins0<150?70:0), tools=toolCost(c), tot=estPay+ins+fuel+c.maint+tools, med=G.medals[id];
   const card=$('#card'); card.hidden=false; G.cardId=id; G.slick&&rigPlay(G.slick,'UpPoint',true);
@@ -227,7 +228,7 @@ function renderNeg(){ const N=G.neg, c=N.c, I=info(c.id), fairLo=Math.round(c.fl
   m.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>lever(b.dataset.l)); m.querySelectorAll('[data-tc]').forEach(b=>b.onclick=()=>tacticAnswer(b.dataset.tc));
   $('#slickSays .face').textContent=SLICK.mood[Math.min(3,Math.floor(N.patience/26))]; if(N.waiting) m.querySelectorAll('.btn').forEach(b=>b.disabled=true); }
 function lever(k){ const N=G.neg, c=N.c; N.used[k]=1; let drop=0, line='';
-  if(k==='markup'){ drop=c.markup; line='Fine, fine. I\'ll take off the market adjustment.'; note('Dealer "market adjustments" are extra profit. You can refuse to pay them.'); }
+  if(k==='markup'){ proSpot('markup_fee'); drop=c.markup; line='Fine, fine. I\'ll take off the market adjustment.'; note('Dealer "market adjustments" are extra profit. You can refuse to pay them.'); }
   if(k==='repair'){ drop=Math.round(c.issue.cost*.6/100)*100; line='A mechanic? Ugh. Okay, I\'ll knock off '+fmt(drop)+'.'; note('An inspection report is negotiation power. Repairs the seller should fix come off the price.'); }
   if(k==='notice'){ drop=Math.round((c.issue?c.issue.cost:300)*.25/100)*100; line='Eh, that\'s normal for this model. But okay, '+fmt(drop)+' off.'; }
   if(k==='fair'){ drop=Math.max(0,Math.round((N.ask-c.floor*1.06)/100)*100); line=drop?'You did your homework. I can come down to '+fmt(N.ask-drop)+'.':'My price is already fair, friend!'; note('Knowing the fair price stops you from overpaying.'); }
@@ -250,7 +251,7 @@ function closeDeal(price){ const N=G.neg; N.done=true; sfx.good(); rigPlay(G.sli
   G.deal={id:N.c.id, c:N.c, price, saved:N.c.price-price}; if(G.deal.saved>0) note('You negotiated '+fmt(G.deal.saved)+' off the sticker price.'); addons(); }
 
 /* ---------- add-ons ---------- */
-function addons(){ const D=G.deal, list=ADDONS.filter(a=>!a.usedOnly||D.c.used&&!D.c.asis); D.add=D.add||{}; list.forEach(a=>{ if(D.add[a.id]==null) D.add[a.id]=true; });
+function addons(){ proSpot('junk_addons'); const D=G.deal, list=ADDONS.filter(a=>!a.usedOnly||D.c.used&&!D.c.asis); D.add=D.add||{}; list.forEach(a=>{ if(D.add[a.id]==null) D.add[a.id]=true; });
   const m=modal(`<div class="eyebrow">Deal at ${fmt(D.price)} · the "finance office"</div><h2>Slick added a few things…</h2><p>"Every smart buyer gets these. They're already on the paperwork, just sign here!" Uncheck anything you don't want. Tap <b>Why?</b> to hear what MoneyBot thinks.</p>
    ${list.map(a=>`<label class="addon"><input type="checkbox" data-ad="${a.id}" ${D.add[a.id]?'checked':''}><div><b>${a.name}</b> · ${fmt(a.price)} <button class="btn sm" type="button" data-why="${a.id}" style="margin-left:6px">Why?</button><div class="why" id="why_${a.id}">Slick: "${a.id==='warranty'?'Peace of mind! Breakdowns are expensive!':a.id==='paint'?'Keeps that shine forever!':a.id==='etch'?'Thieves hate this one trick!':'Smoother ride, better mileage!'}"</div></div></label>`).join('')}
    <div class="bigrow"><span>Add-ons total</span><b id="adT"></b></div>
@@ -287,7 +288,7 @@ function finance(){ const D=G.deal, c=D.c; const kind=c.used?'used':'new';
      <div class="bigrow"><span>Savings left after today</span><b style="color:${G.cash-r.upfront<1000?'var(--red)':'var(--green)'}">${fmt(G.cash-r.upfront)}</b></div>
      ${D.method==='dealer'&&D.term>=72?'<div class="lesson">Slick picked a long loan to make the payment look small. A longer loan means more interest, and you can owe more than the car is worth.</div>':''}
      ${G.cash-r.upfront<1000?'<div class="lesson">Keep some savings for emergencies. If you spend it all on the car, the first repair goes on a credit card.</div>':''}`; };
-  if(!D.slickTerm){ D.slickTerm=1; slick(SLICK.monthly[0],5000); }
+  if(!D.slickTerm){ D.slickTerm=1; slick(SLICK.monthly[0],5000); proSpot('long_term'); if(D.method==='dealer') setTimeout(()=>proSpot('rate_markup'),1500); }
   m.querySelectorAll('[name=pm]').forEach(i=>i.onchange=()=>{ D.method=i.value; upd(); });
   m.querySelector('#dnR').oninput=e=>{ D.down=+e.target.value; upd(); };
   m.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{ D.term=+b.dataset.t; m.querySelectorAll('[data-t]').forEach(x=>x.classList.toggle('on',x===b)); upd(); });
@@ -368,9 +369,9 @@ function report(){ clearTimeout(G.yT); const D=G.deal, c=D.c, Y=G.year, I=info(c
    <div class="badges">${B.map(([ok,t])=>`<span class="${ok?'':'no'}">${ok?'✓':'✗'} ${t}</span>`).join('')}</div>
    ${lessons.map(l=>`<div class="lesson">${l}</div>`).join('')}
    ${Y.lessons.length?`<div class="eyebrow" style="margin-top:14px">Your choices this year</div><ul class="notes">${Y.lessons.map(l=>'<li>'+l+'</li>').join('')}</ul>`:''}
-   <div class="mact"><button class="btn" id="rpNotes">📒 What I learned</button><button class="btn" id="rpLife">Try a different life</button><button class="btn pri" id="rpAgain">Shop again as ${YOU.name}</button></div>`, true);
+   <div class="mact"><button class="btn" id="rpNotes">📒 What I learned</button><button class="btn" id="rpLife">Try a different life</button>${G.storyMode==='prologue'?'<button class="btn gold" id="rpStory">Continue the story →</button>':`<button class="btn pri" id="rpAgain">Shop again as ${YOU.name}</button>`}</div>`, true);
   G.cash=Y.save; hud(); setTimeout(()=>{ sfx.thud(); shake=0; if(gc==='') confetti(); else sfx.bad(); },380);
-  $('#rpAgain').onclick=resetRun; $('#rpNotes').onclick=()=>$('#btnNotes').onclick(); $('#rpLife').onclick=pickLife; }
+  if($('#rpAgain')) $('#rpAgain').onclick=resetRun; if($('#rpStory')) $('#rpStory').onclick=prologueEnd; $('#rpNotes').onclick=()=>$('#btnNotes').onclick(); $('#rpLife').onclick=pickLife; }
 function resetRun(){ closeModal(); clearConfetti(); G.cash=YOU.savings; G.deal=null; G.year=null; G.preapproved=false; G.habits=null; for(const k in G.known){ G.known[k].inspected=false; G.known[k].found=false; } G.you.root.position.set(0,0,10); hud(); startLot(false); advise('Same paycheck, same savings. Can you beat a score of <b>'+G.best+'</b>?'); }
 
 /* ---------- main loop ---------- */
