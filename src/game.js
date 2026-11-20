@@ -18,9 +18,9 @@ function hud(){ $('#hSave').textContent=fmt(G.cash); $('#hPay').textContent=fmt(
 /* ---------- sound ---------- */
 let AC=null, eng=null;
 function audio(){ if(AC) return; try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
-function tone(f,d=.12,type='triangle',v=.05,slide){ if(!AC) return; const t=AC.currentTime, o=AC.createOscillator(), g=AC.createGain(); o.type=type; o.frequency.setValueAtTime(f,t); if(slide) o.frequency.exponentialRampToValueAtTime(slide,t+d); g.gain.setValueAtTime(.0001,t); g.gain.linearRampToValueAtTime(v,t+.01); g.gain.exponentialRampToValueAtTime(.0001,t+d); o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+d+.02); }
+function tone(f,d=.12,type='triangle',v=.05,slide){ if(!AC) return; const t=AC.currentTime, o=AC.createOscillator(), g=AC.createGain(); o.type=type; o.frequency.setValueAtTime(f,t); if(slide) o.frequency.exponentialRampToValueAtTime(slide,t+d); g.gain.setValueAtTime(.0001,t); g.gain.linearRampToValueAtTime(v,t+.01); g.gain.exponentialRampToValueAtTime(.0001,t+d); o.connect(g); g.connect(aOut()); o.start(t); o.stop(t+d+.02); }
 const sfx={tick:()=>tone(900,.05,'sine',.04), good:()=>{ tone(660,.12); tone(990,.18,'triangle',.05); }, bad:()=>tone(180,.25,'sawtooth',.04,90), cash:()=>{ tone(1320,.08,'square',.025); tone(1760,.12,'square',.02); }, thud:()=>tone(90,.2,'sine',.12,40)};
-function engineOn(on){ if(!AC) return; if(on && !eng){ const o=AC.createOscillator(), o2=AC.createOscillator(), f=AC.createBiquadFilter(), g=AC.createGain(), g2=AC.createGain(); o.type='sawtooth'; o2.type='triangle'; f.type='lowpass'; f.frequency.value=400; f.Q.value=2; g.gain.value=0; g2.gain.value=.6; o.connect(f); o2.connect(g2); g2.connect(f); f.connect(g); g.connect(AC.destination); o.start(); o2.start(); eng={o,o2,g,f}; duck(.35); } if(!on && eng){ eng.g.gain.setTargetAtTime(0,AC.currentTime,.1); const e=eng; setTimeout(()=>{ e.o.stop(); e.o2.stop(); },500); eng=null; duck(1); } }
+function engineOn(on){ if(!AC) return; if(on && !eng){ const o=AC.createOscillator(), o2=AC.createOscillator(), f=AC.createBiquadFilter(), g=AC.createGain(), g2=AC.createGain(); o.type='sawtooth'; o2.type='triangle'; f.type='lowpass'; f.frequency.value=400; f.Q.value=2; g.gain.value=0; g2.gain.value=.6; o.connect(f); o2.connect(g2); g2.connect(f); f.connect(g); g.connect(aOut()); o.start(); o2.start(); eng={o,o2,g,f}; duck(.35); } if(!on && eng){ eng.g.gain.setTargetAtTime(0,AC.currentTime,.1); const e=eng; setTimeout(()=>{ e.o.stop(); e.o2.stop(); },500); eng=null; duck(1); } }
 function engineTick(D,gas,mph){ if(!eng) return; const c=D.c, t=AC.currentTime;
   if(c.fuel==='electric'){ const f=180+Math.abs(D.v)*22; eng.o.frequency.setTargetAtTime(f,t,.05); eng.o2.frequency.setTargetAtTime(f*1.5,t,.05); eng.f.frequency.setTargetAtTime(2200,t,.1); eng.g.gain.setTargetAtTime(.006+gas*.006,t,.08); return; }
   const r=Math.abs(D.v)/c.drive.top, gear=Math.min(4,Math.floor(r*5)), rpm=r*5-gear; if(gear!==D.gear){ if(gear>D.gear&&gas){ eng.g.gain.setValueAtTime(.008,t); D.shiftT=.12; } D.gear=gear; }
@@ -28,11 +28,11 @@ function engineTick(D,gas,mph){ if(!eng) return; const c=D.c, t=AC.currentTime;
   eng.f.frequency.setTargetAtTime(300+rpm*500+gas*250,t,.06); eng.g.gain.setTargetAtTime((v8?.034:.026)+gas*.014,t,D.shiftT>0?.15:.05); D.shiftT=Math.max(0,(D.shiftT||0)-.016); }
 
 /* ---------- boot ---------- */
-async function boot(){
-  initThree(); setupMaterials();
+async function boot(){ bootTips(); bootProg(8); try{ await Promise.all(["800 64px 'Barlow Condensed'","700 40px 'Barlow Condensed'","600 20px Barlow"].map(f=>document.fonts.load(f))); }catch(e){}
+  initThree(); setupMaterials(); bootProg(18);
   ['tLogo','hLogo','aLogo'].forEach(id=>$('#'+id).src=MB_ASSETS.logo);
-  buildWorld(); worldPlus();
-  GLTF.crowd=await parseGLB(MB_ASSETS.crowd); GLTF.hero=await parseGLB(MB_ASSETS.hero);
+  buildWorld(); worldPlus(); if(typeof gfxPlus==='function') gfxPlus(); bootProg(40);
+  GLTF.crowd=await parseGLB(MB_ASSETS.crowd); bootProg(60); GLTF.hero=await parseGLB(MB_ASSETS.hero); bootProg(75);
   CARS.forEach(c=>{ const g=makeCar(c), [x,z,r]=LOT_SPOTS[c.id]; g.position.set(x,0,z); g.rotation.y=r; scene.add(g); W.lotCars.set(c.id,g);
     const tag=sign(scene,[{t:c.year+' '+c.name,size:40,color:'#0B1220'},{t:fmt(c.price),size:64,color:c.used?'#B45309':'#047857'}],2.6,1.1,x,2.75+(c.style==='truck'?.5:0),z,{bg:'#FFFFFF',r:18,w:512,h:216}); tag.userData.bill=true; g.userData.tag=tag; });
   /* Nova on a turntable */
@@ -41,14 +41,15 @@ async function boot(){
   G.you=makeRig(GLTF.crowd, MB.you, .9,'g'); G.you.root.position.set(0,0,10); G.you.root.add(blob(1.1)); scene.add(G.you.root);
   G.slick=makeRig(GLTF.crowd, MB.slick, .95,'y'); G.slick.root.position.set(4,0,-12); G.slick.root.add(blob(1.1)); scene.add(G.slick.root);
   G.mech=makeRig(GLTF.crowd, MB.mech, .85,'g'); G.mech.root.position.set(-20,0,11.6); scene.add(G.mech.root);
-  G.cuBot=makeRig(GLTF.crowd, MB.cu, .85,'g'); G.cuBot.root.position.set(19,0,10.6); scene.add(G.cuBot.root);
+  G.cuBot=makeRig(GLTF.crowd, MB.cu, .85,'g'); G.cuBot.root.position.set(19,0,10.6); scene.add(G.cuBot.root); buildInsOffice();
   G.mb=makeRig(GLTF.hero, MB.hero, 1.0,'g'); G.mb.root.position.set(-1.5,1.4,10); scene.add(G.mb.root);
   livePlus();
   camera.position.set(30,24,34); camera.lookAt(0,0,0);
   $('#btnStart').disabled=false; $('#btnStart').textContent='Free play'; if($('#btnStory')) $('#btnStory').disabled=false;
+  bootProg(95); initMenu(); bootDone();
   requestAnimationFrame(loop);
 }
-$('#btnStart').onclick=()=>{ audio(); musicStart(); applyProfile(PICK); $('#title').hidden=true; G.you.root.position.set(0,0,10); hud(); startLot(true); };
+$('#btnStart').onclick=()=>{ audio(); musicStart(); applyProfile(PICK); $('#title').hidden=true; G.you.root.position.set(0,0,10); hud(); startLot(true); if(!store.get('coached',false)){ store.set('coached',true); setTimeout(()=>coachStart(COACH_FREE),1200); } };
 function startLot(first){ G.mode='lot'; $('#hud').hidden=false; hud(); document.body.classList.remove('driving'); $('#dhud').hidden=true; $('#pads').hidden=true;
   if(first){ setTimeout(()=>advise('Hey! I\'m MoneyBot. You\'re <b>'+YOU.name+'</b>, '+YOU.job.toLowerCase()+'. You take home <b>'+fmt(YOU.takeHome)+' a month</b> and have <b>'+fmt(YOU.savings)+'</b> saved. Try to keep <b>everything</b> the car costs (payment, insurance, gas, repairs) under <b>'+fmt(YOU.takeHome*GOOD_PCT)+'/month</b>. Walk up to any car to check it out.',12000),600);
     setTimeout(()=>slick(pick(SLICK.hello)),3500); } }
@@ -125,13 +126,13 @@ function closeCard(){ $('#card').hidden=true; G.cardId=null; G.near=null; }
 function inspect(id){ const c=carById(id), I=info(id); if(G.cash<INSPECT_FEE) return toast('Not enough cash.','bad'); G.cash-=INSPECT_FEE; I.inspected=true; I.found=!!(c.issue && Math.random()<Math.min(1,c.issue.p+.25)); G.spentResearch=(G.spentResearch||0)+INSPECT_FEE; hud(); sfx.cash();
   rigPlay(G.mech,'UpPoint',true); note('A '+fmt(INSPECT_FEE)+' pre-purchase inspection can uncover repairs that cost thousands. It also gives you a reason to ask for a lower price.'); openCard(id);
   advise(I.found?'Mike found something. That repair estimate is <b>leverage</b>. Bring it up when you negotiate.':'Clean bill of health. Now you can buy with confidence.'); }
-function creditUnion(){ const c=modal(`<button class="x" onclick="closeModal()">×</button><div class="eyebrow">BotBank Credit Union</div><h2>Get pre-approved before you shop</h2>
+function creditUnion(){ const c=modal(`<button class="x" onclick="closeModal()">×</button><div class="eyebrow">${escS(CU_NAME())}</div>${spBadge('creditunion','Loan partner')}<h2>Get pre-approved before you shop</h2>
   <p>A credit union is owned by its members, so loans usually cost less than dealer financing. With a <b>${YOU.credit}</b> credit score and a steady job, here's what we can offer:</p>
   <div class="specs"><div><em>Used car APR</em><b>${(RATES.cu.used*100).toFixed(1)}%</b></div><div><em>New car APR</em><b>${(RATES.cu.new*100).toFixed(1)}%</b></div><div><em>Dealer's usual rate</em><b>${(RATES.dealer.used*100).toFixed(1)}% / ${(RATES.dealer.new*100).toFixed(1)}%</b></div><div><em>Max term</em><b>60 months</b></div></div>
   <div class="lesson">Walking into a dealership already approved means the salesperson can't hide extra profit in your interest rate.</div>
   <div class="mact"><button class="btn" onclick="closeModal()">Maybe later</button><button class="btn pri" id="cuYes" ${G.preapproved?'disabled':''}>${G.preapproved?'You\'re pre-approved ✓':'Get pre-approved (free)'}</button></div>`);
   const b=c.querySelector('#cuYes'); if(b) b.onclick=()=>{ G.preapproved=true; sfx.good(); hud(); rigPlay(G.cuBot,'TwistJump',true); note('Credit union pre-approval: '+(RATES.cu.used*100).toFixed(1)+'% APR used, '+(RATES.cu.new*100).toFixed(1)+'% new, vs the dealer\'s '+(RATES.dealer.used*100).toFixed(1)+'% / '+(RATES.dealer.new*100).toFixed(1)+'%.'); closeModal(); toast('✓ Pre-approved at BotBank Credit Union','good'); }; }
-function mechanic(){ modal(`<button class="x" onclick="closeModal()">×</button><div class="eyebrow">Mike's Garage</div><h2>"Bring me any used car first."</h2><p>For ${fmt(INSPECT_FEE)} I'll put it on the lift and tell you what's wrong before you buy it. Open a used car's card and pick <b>Pre-purchase inspection</b>.</p><div class="lesson">Dealers aren't required to tell you everything. An independent mechanic works for you, not for the seller.</div><div class="mact"><button class="btn pri" onclick="closeModal()">Got it</button></div>`); rigPlay(G.mech,'RightHand',true); }
+function mechanic(){ modal(`<button class="x" onclick="closeModal()">×</button><div class="eyebrow">Mike's Garage</div>${spBadge('service','Service partner')}<h2>"Bring me any used car first."</h2><p>For ${fmt(INSPECT_FEE)} I'll put it on the lift and tell you what's wrong before you buy it. Open a used car's card and pick <b>Pre-purchase inspection</b>.</p><div class="lesson">Dealers aren't required to tell you everything. An independent mechanic works for you, not for the seller.</div><div class="mact"><button class="btn pri" onclick="closeModal()">Got it</button></div>`); rigPlay(G.mech,'RightHand',true); }
 
 /* ---------- test drive ---------- */
 const CPS=[60,160,250,345];
@@ -176,9 +177,9 @@ function driveTick(dt){ const D=G.drive; if(!D) return; arches(); D.t+=dt; const
   const body=g.children[0]; D.pitch+=(((brk&&D.v>2)?-.035:gas?.022:0)-D.pitch)*Math.min(1,dt*5); body.rotation.z=D.pitch; body.rotation.x+=(-D.steer*Math.min(1,Math.abs(D.v)/18)*.06-dh*.12-body.rotation.x)*Math.min(1,dt*6);
   g.userData.tail.emissiveIntensity=brk?3:.5;
   /* camera: trails the momentum, a beat behind the nose */
-  const ch=D.vh*.6+D.h*.4, fx=Math.sin(ch), fz=Math.cos(ch), back=7.2+Math.abs(D.v)*.07; const tx=D.x-fx*back, tz=D.z-fz*back; camera.position.x+=(tx-camera.position.x)*Math.min(1,dt*4); camera.position.z+=(tz-camera.position.z)*Math.min(1,dt*4); camera.position.y+=(3.1-camera.position.y)*Math.min(1,dt*4);
-  if(shake>0){ camera.position.x+=(Math.random()-.5)*shake; camera.position.y+=(Math.random()-.5)*shake*.5; shake=Math.max(0,shake-dt*1.5); } if(sp.wobble && gas && D.v>4) camera.position.y+=(Math.random()-.5)*sp.wobble*.05;
-  camera.lookAt(D.x+Math.sin(D.h)*4,1,D.z+Math.cos(D.h)*4); sun.position.set(D.x+30,50,D.z+25); sun.target.position.set(D.x,0,D.z);
+  const ch=D.vh*.6+D.h*.4, fx=Math.sin(ch), fz=Math.cos(ch), back=6.6+Math.abs(D.v)*.09; const tx=D.x-fx*back, tz=D.z-fz*back; camera.position.x+=(tx-camera.position.x)*Math.min(1,dt*4); camera.position.z+=(tz-camera.position.z)*Math.min(1,dt*4); camera.position.y+=(3.05-Math.min(.7,Math.abs(D.v)*.016)-camera.position.y)*Math.min(1,dt*4);
+  if(!SET.shake) shake=0; if(shake>0){ camera.position.x+=(Math.random()-.5)*shake; camera.position.y+=(Math.random()-.5)*shake*.5; shake=Math.max(0,shake-dt*1.5); } if(sp.wobble && gas && D.v>4) camera.position.y+=(Math.random()-.5)*sp.wobble*.05;
+  { const la=4.5+Math.abs(D.v)*.12; camera.lookAt(D.x+Math.sin(D.h)*la,1.05,D.z+Math.cos(D.h)*la); } sun.position.set(D.x+30,50,D.z+25); sun.target.position.set(D.x,0,D.z);
   G.fov=50+clamp(mph-18,0,40)*.38; $('#speedfx').style.opacity=clamp((mph-28)/30,0,.9);
   engineTick(D,gas,mph);
   $('#dMph').textContent=Math.round(mph); $('#dMph').parentElement.classList.toggle('fast',mph>45); $('#dCp').textContent=D.cp+'/'+CPS.length; $('#dTime').textContent=Math.floor(D.t/60)+':'+String(Math.floor(D.t%60)).padStart(2,'0'); $('#dBump').textContent=D.bumps+D.cones; $('#dCoin').textContent=D.coins+'/'+(D.nCoins||0);
@@ -279,7 +280,7 @@ function finance(){ const D=G.deal, c=D.c; const kind=c.used?'used':'new';
    </div><div id="fin"></div></div>
    <div class="mact"><button class="btn" id="finBack">Back</button><button class="btn pri" id="finSign">Sign the papers</button></div>`, true);
   const upd=()=>{ const r=calcDeal(); m.querySelector('#dnV').textContent=fmt(D.down); m.querySelector('#loanBits').style.display=(D.method==='cash'||D.method==='lease')?'none':'';
-    m.querySelector('#fin').innerHTML=`<div class="bigrow"><span>Car + add-ons</span><b>${fmt(base)}</b></div><div class="bigrow"><span>Sales tax (6%) + fees</span><b>${fmt(tax+fees)}</b></div>
+    m.querySelector('#fin').innerHTML=`<div class="bigrow"><span>Car + add-ons</span><b>${fmt(base)}</b></div><div class="bigrow"><span>KY usage tax (6%) + fees</span><b>${fmt(tax+fees)}</b></div><div class="kyfees" style="color:var(--txt3);margin:2px 0 6px">Usage tax ${fmt(tax)} · dealer doc fee ${fmt(DOC_FEE)} (dealer charge, you can push back) · county clerk: title $${KY.title}, plate $${KY.reg}, lien $${KY.lien}, notary $${KY.notary}</div>
      ${D.method==='lease'?`<div class="bigrow"><span>Due today</span><b>${fmt(r.upfront)}</b></div>`:D.method==='cash'?`<div class="bigrow"><span>Paid today</span><b>${fmt(r.upfront)}</b></div>`:`<div class="bigrow"><span>Amount borrowed</span><b>${fmt(r.loan)}</b></div><div class="bigrow"><span>Interest over ${D.term} months</span><b style="color:var(--red)">${fmt(r.interest)}</b></div>`}
      <div class="bigrow"><span>${D.method==='lease'?'Lease payment':'Monthly payment'}</span><b>${fmt(r.pay)}</b></div>
      <div class="bigrow"><span>Insurance${r.full?' (full coverage required)':''}</span><b>${fmt(r.ins)}</b></div>
@@ -375,9 +376,9 @@ function report(){ clearTimeout(G.yT); const D=G.deal, c=D.c, Y=G.year, I=info(c
 function resetRun(){ closeModal(); clearConfetti(); G.cash=YOU.savings; G.deal=null; G.year=null; G.preapproved=false; G.habits=null; for(const k in G.known){ G.known[k].inspected=false; G.known[k].found=false; } G.you.root.position.set(0,0,10); hud(); startLot(false); advise('Same paycheck, same savings. Can you beat a score of <b>'+G.best+'</b>?'); }
 
 /* ---------- main loop ---------- */
-function loop(){ requestAnimationFrame(loop); const dt=Math.min(.05,clock.getDelta()); G.t+=dt; const t=G.t;
-  W.anim.forEach(f=>f(t)); [G.you,G.slick,G.mech,G.cuBot,G.mb].forEach(r=>r&&r.mixer.update(dt)); plusTick(dt,t);
-  if(G.mode==='title'){ const a=t*.08; camera.position.set(Math.cos(a)*38,22,Math.sin(a)*38+4); camera.lookAt(0,0,0); }
+function loop(){ requestAnimationFrame(loop); const dt=Math.min(.05,clock.getDelta()); try{ shellTick(dt); }catch(e){} if(G.paused){ renderer.render(scene,camera); return; } G.t+=dt; const t=G.t;
+  W.anim.forEach(f=>f(t)); [G.you,G.slick,G.mech,G.cuBot,G.mb,G.insBot].forEach(r=>r&&r.mixer.update(dt)); plusTick(dt,t);
+  if(G.mode==='tour') tourTick(dt); else if(G.mode==='title'){ const a=t*.08; camera.position.set(Math.cos(a)*38,22,Math.sin(a)*38+4); camera.lookAt(0,0,0); }
   else if(G.mode==='lot') lotTick(dt);
   else if(G.mode==='drive') driveTick(dt);
   else if(G.mode==='office'){ camera.position.x+=(8.5-camera.position.x)*dt*3; camera.position.y+=(3.6-camera.position.y)*dt*3; camera.position.z+=(-17.6-camera.position.z)*dt*3; camera.lookAt(3.8,1.1,-22.5); }

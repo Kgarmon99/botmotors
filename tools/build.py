@@ -1,8 +1,8 @@
 import os,sys
 R=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 src=lambda f: open(os.path.join(R,'src',f)).read()
-tpl=src('index.tpl.html'); css=src('style.css'); js='\n'.join(src(f) for f in ['data.js','world.js','game.js','plus.js','story.js'])
-html=tpl.replace('/*CSS*/',css).replace('/*JS*/',js)
+tpl=src('index.tpl.html'); css=src('style.css')+'\n'+src('theme.css'); fonts=open(os.path.join(R,'vendor','barlow.css')).read(); js='\n'.join(src(f) for f in ['data.js','icons.js','sponsors.js','world.js','game.js','plus.js','story.js','teach.js','gfx.js','shell.js'])
+html=tpl.replace('/*FONTS*/',fonts).replace('/*CSS*/',css).replace('/*JS*/',js)
 open(os.path.join(R,'index.html'),'w').write(html)
 os.makedirs(os.path.join(R,'dist'),exist_ok=True)
 inl=html

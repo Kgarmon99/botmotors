@@ -1,8 +1,24 @@
+/* ---------- settings + saves (loaded first so everything can use them) ---------- */
+const VERSION='1.1.0';
+const PARAMS=new URLSearchParams(location.search);
+var BOOT_TIPS=['The sticker price is the opening offer, not the price.','Get pre-approved at a credit union before you shop. Then the dealer can\'t hide profit in your rate.',
+  'Keep everything a car costs (payment, insurance, gas, repairs) under about 15% of take-home pay.','A $120 inspection can uncover a $2,400 repair.','Negotiate the out-the-door price first. Talk monthly payments last.',
+  'Longer loans mean smaller payments, but way more interest.','In Kentucky, a 6% usage tax is added when you buy a car.','Paint protection and VIN etching are almost never worth it.','Insurance for a fast car at 18 can cost more than the payment.'];
+var BOOT_MSG=[[0,'Paving the lot…'],[18,'Washing the cars…'],[40,'Pumping up the tires…'],[60,'Waking up Slick…'],[90,'Opening the gates…']];
+
+const SET=(()=>{const d={vol:.9,gfx:-1,shake:true,tips:true};try{return Object.assign(d,JSON.parse(localStorage.getItem('bm_settings')||'{}'));}catch(e){return d;}})();
+function saveSet(){try{localStorage.setItem('bm_settings',JSON.stringify(SET));}catch(e){}}
+let STORY_SLOT=(()=>{try{return +(JSON.parse(localStorage.getItem('bm_storySlot'))||1)||1;}catch(e){return 1;}})();
+const storyKey=n=>(n||STORY_SLOT)===1?'story':'story_s'+(n||STORY_SLOT);
+function aOut(){if(!AC.__m){AC.__m=AC.createGain();AC.__m.gain.value=SET.vol;AC.__m.connect(AC.destination);}return AC.__m;}
 /* ===================== BotMotors · data =====================
    All money is per month unless it says otherwise. Fictional brands. */
 const YOU = { name:'You', age:18, job:'Crew lead at Byte Burger', takeHome:3000, gross:3700, living:1650, savings:6500, credit:670, milesMonth:750 };
 const GAS = 3.40, PREMIUM = 3.95, KWH_MILE = .055;
-const TAX = .06, DOC_FEE = 399, TITLE_FEE = 150, INSPECT_FEE = 120;
+const TAX = .06, DOC_FEE = 399, INSPECT_FEE = 120;
+/* Kentucky county clerk fees (title $9, yearly registration $21, lien statement $22, notary $2) */
+const KY={usage:.06, title:9, reg:21, lien:22, notary:2};
+const TITLE_FEE = KY.title+KY.reg+KY.lien+KY.notary;
 const GOOD_PCT = .15;          // keep ALL car costs under ~15% of take-home
 const RATES = { dealer:{used:.119, new:.089}, cu:{used:.084, new:.069} };   // APR for a 670 score
 const CARS = [

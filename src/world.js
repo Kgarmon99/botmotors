@@ -1,6 +1,7 @@
 /* ===================== BotMotors · 3D world ===================== */
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const MOBILE = matchMedia('(pointer:coarse)').matches || /CrOS/.test(navigator.userAgent) && innerWidth<900;
+const QT = SET.gfx>=0?SET.gfx:(MOBILE?1:2);
 let renderer, scene, camera, sun, hemi, clock=new THREE.Clock();
 const GLTF={}, MB={}, W={cars:[], lotCars:new Map(), cones:[], traffic:[], anim:[], colliders:[]};
 const BOX=new THREE.BoxGeometry(1,1,1), SPH=new THREE.SphereGeometry(1,16,12), CYL=new THREE.CylinderGeometry(1,1,1,20);
@@ -33,8 +34,8 @@ function blob(s=1){ if(!blobTex){ const c=document.createElement('canvas'); c.wi
 function textTex(lines, o={}){ const w=o.w||512, h=o.h||128, c=document.createElement('canvas'); c.width=w; c.height=h; const g=c.getContext('2d');
   if(o.bg){ g.fillStyle=o.bg; if(o.r){ g.beginPath(); g.roundRect(0,0,w,h,o.r); g.fill(); } else g.fillRect(0,0,w,h); }
   if(o.border){ g.strokeStyle=o.border; g.lineWidth=o.bw||8; g.beginPath(); g.roundRect(o.bw/2||4,o.bw/2||4,w-(o.bw||8),h-(o.bw||8),o.r||0); g.stroke(); }
-  (Array.isArray(lines)?lines:[lines]).forEach((L,i,arr)=>{ const sz=(L.size||o.size||64); g.font=`${L.weight||o.weight||800} ${sz}px ${o.font||'Inter, system-ui, sans-serif'}`; g.fillStyle=L.color||o.color||'#fff'; g.textAlign='center'; g.textBaseline='middle';
-    let t=L.t||L; while(g.measureText(t).width>w*.92 && sz>10){ g.font=`${L.weight||o.weight||800} ${--L.size||(o.size=sz-2)}px ${o.font||'Inter, system-ui, sans-serif'}`; break; }
+  (Array.isArray(lines)?lines:[lines]).forEach((L,i,arr)=>{ const sz=(L.size||o.size||64); g.font=`${L.weight||o.weight||800} ${sz}px ${o.font||"'Barlow Condensed', system-ui, sans-serif"}`; g.fillStyle=L.color||o.color||'#fff'; g.textAlign='center'; g.textBaseline='middle';
+    let t=L.t||L; while(g.measureText(t).width>w*.92 && sz>10){ g.font=`${L.weight||o.weight||800} ${--L.size||(o.size=sz-2)}px ${o.font||"'Barlow Condensed', system-ui, sans-serif"}`; break; }
     g.fillText(L.t||L, w/2, h*(arr.length===1?.53:(i+.6)/arr.length)); });
   const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.anisotropy=8; return t; }
 function sign(g, lines, w, h, x, y, z, o={}){ const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h), new THREE.MeshStandardMaterial({map:textTex(lines,Object.assign({w:Math.round(512*Math.max(1,w/h/4)),h:128},o)), emissive:'#fff', emissiveIntensity:o.glow||0, emissiveMap:null, roughness:.6, transparent:!!o.transparent})); if(o.glow) m.material.emissiveMap=m.material.map; m.position.set(x,y,z); if(o.ry) m.rotation.y=o.ry; g.add(m); return m; }
@@ -100,7 +101,7 @@ function lotTex(){ const c=document.createElement('canvas'); c.width=1024; c.hei
   for(let i=0;i<4000;i++){ g.fillStyle=`rgba(255,255,255,${Math.random()*.04})`; g.fillRect(Math.random()*1024,Math.random()*640,2,2); }
   g.strokeStyle='#F8FAFC'; g.lineWidth=5; const px=x=>(x-LOT.x0)/(LOT.x1-LOT.x0)*1024, pz=z=>(z-LOT.z0)/(LOT.z1-LOT.z0)*640;
   for(let x=-18;x<=18;x+=6){ [[-10,-3],[3,10]].forEach(([a,b])=>{ g.beginPath(); g.moveTo(px(x),pz(a)); g.lineTo(px(x),pz(b)); g.stroke(); }); }
-  g.fillStyle='#FBBF24'; g.font='900 46px Inter, system-ui, sans-serif'; g.textAlign='center'; g.fillText('BOT CITY MOTORS', 512, pz(0)+16);
+  g.fillStyle='#FBBF24'; g.font="900 46px 'Barlow Condensed', system-ui, sans-serif"; g.textAlign='center'; g.fillText('BOT CITY MOTORS', 512, pz(0)+16);
   const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.anisotropy=8; return t; }
 function roadTex(){ const c=document.createElement('canvas'); c.width=256; c.height=256; const g=c.getContext('2d'); g.fillStyle='#2B2F36'; g.fillRect(0,0,256,256); for(let i=0;i<900;i++){ g.fillStyle=`rgba(255,255,255,${Math.random()*.05})`; g.fillRect(Math.random()*256,Math.random()*256,2,2); }
   g.fillStyle='#FBBF24'; g.fillRect(124,0,3,256); g.fillRect(130,0,3,256); g.fillStyle='#E2E8F0'; g.fillRect(6,0,4,256); g.fillRect(246,0,4,256);
@@ -126,7 +127,7 @@ function buildWorld(){
   bx(sr,31,.6,11,0,6,-21,mat('#0B1220')); sign(sr,[{t:'BOT CITY MOTORS',color:'#FBBF24'}],18,1.6,0,7.6,-15.6,{bg:'#0B1220',glow:.9,w:1536,h:136,size:96});
   bx(sr,6,.08,3,4,0,-23,mat('#F8FAFC')); const desk=bx(sr,3.2,1,1.2,4,0,-22.5,mat('#1E293B')); W.desk=new THREE.Vector3(4,0,-22.5);
   /* kiosks: credit union booth, mechanic bay */
-  const cu=new THREE.Group(); cu.position.set(19,0,9); scene.add(cu); bx(cu,3.4,2.6,2.4,0,0,0,mat('#1D4ED8')); bx(cu,3.8,.3,2.8,0,2.6,0,mat('#F8FAFC')); sign(cu,['BotBank',{t:'Credit Union',size:44,weight:600}],3.2,1,0,1.7,1.21,{bg:'#1E40AF',color:'#fff',size:56}); W.cu=cu.position.clone();
+  const cu=new THREE.Group(); cu.position.set(19,0,9); scene.add(cu); bx(cu,3.4,2.6,2.4,0,0,0,mat('#1D4ED8')); bx(cu,3.8,.3,2.8,0,2.6,0,mat('#F8FAFC')); {const sp=slotFill('creditunion'); sign(cu,sp?[sp.name,{t:'Car loans',size:44,weight:600}]:['BotBank',{t:'Credit Union',size:44,weight:600}],3.2,1,0,1.7,1.21,{bg:sp?sp.color:'#1E40AF',color:'#fff',size:56}); if(sp) cu.children[0].material=mat(sp.color);} W.cu=cu.position.clone();
   const mg=new THREE.Group(); mg.position.set(-20,0,8); scene.add(mg); bx(mg,6,4,6,0,0,0,mat('#E5E7EB')); bx(mg,4.4,3,.1,0,0,3.01,mat('#475569',{metalness:.5})); for(let y=.3;y<3;y+=.32) bx(mg,4.4,.04,.04,0,y,3.06,mat('#334155'));
   sign(mg,['MIKE\'S GARAGE',{t:'Pre-purchase inspection $120',size:36,weight:600}],5,1.2,0,3.4,3.08,{bg:'#F97316',size:54}); W.mech=mg.position.clone();
   /* sky dancer, flags, balloons */
@@ -162,11 +163,11 @@ function onLot(x,z){ return x>LOT.x0+.5&&x<LOT.x1-.5&&z>LOT.z0+.5&&z<LOT.z1+.5 |
 
 function initThree(){
   renderer=new THREE.WebGLRenderer({canvas:$('#gl'), antialias:!MOBILE, powerPreference:'high-performance'});
-  renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE?1.25:1.75)); renderer.setSize(innerWidth,innerHeight); renderer.outputEncoding=THREE.sRGBEncoding; renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=.92;
-  renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  renderer.setPixelRatio(Math.min(devicePixelRatio, [1,1.25,1.75][QT])); renderer.setSize(innerWidth,innerHeight); renderer.outputEncoding=THREE.sRGBEncoding; renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=.92;
+  renderer.shadowMap.enabled=QT>0; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   scene=new THREE.Scene(); camera=new THREE.PerspectiveCamera(50, innerWidth/innerHeight, .1, 600);
   hemi=new THREE.HemisphereLight('#E0F2FE','#4B5563',.55); scene.add(hemi);
-  sun=new THREE.DirectionalLight('#FFF4E0',1.6); sun.position.set(30,50,25); sun.castShadow=true; const sz=MOBILE?1024:2048; sun.shadow.mapSize.set(sz,sz); Object.assign(sun.shadow.camera,{left:-45,right:45,top:45,bottom:-45,near:1,far:150}); sun.shadow.bias=-.0004; scene.add(sun); scene.add(sun.target);
+  sun=new THREE.DirectionalLight('#FFF4E0',1.6); sun.position.set(30,50,25); sun.castShadow=true; const sz=QT>=2?2048:1024; sun.shadow.mapSize.set(sz,sz); Object.assign(sun.shadow.camera,{left:-45,right:45,top:45,bottom:-45,near:1,far:150}); sun.shadow.bias=-.0004; scene.add(sun); scene.add(sun.target);
   const pm=new THREE.PMREMGenerator(renderer); const env=new THREE.Scene(); env.background=new THREE.Color('#BFDBFE'); const l1=new THREE.Mesh(new THREE.PlaneGeometry(40,10),new THREE.MeshBasicMaterial({color:'#FFFFFF'})); l1.position.set(0,12,-10); l1.lookAt(0,0,0); env.add(l1); W.env=pm.fromScene(env,.04).texture; GLASS.envMap=W.env;
   addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
 }

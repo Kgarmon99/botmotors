@@ -125,7 +125,7 @@ const MUS={on:store.get('music',true), g:null, next:0, step:0, timer:0};
 const CHORDS=[[48,55,59,64],[45,52,55,60],[41,48,52,57],[43,50,55,59]], ARP=[0,2,1,3,2,1,3,2];
 const mtof=m=>440*Math.pow(2,(m-69)/12);
 function mnote(m,t,d,v,type,att=.02){ const o=AC.createOscillator(), g=AC.createGain(); o.type=type; o.frequency.value=mtof(m); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(v,t+att); g.gain.setTargetAtTime(0,t+d*.6,d*.25); o.connect(g); g.connect(MUS.g); o.start(t); o.stop(t+d+.6); }
-function musicStart(){ if(!AC||MUS.g) return; const lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1600; MUS.g=AC.createGain(); MUS.g.gain.value=MUS.on?.9:0; MUS.g.connect(lp); lp.connect(AC.destination); MUS.next=AC.currentTime+.15;
+function musicStart(){ if(!AC||MUS.g) return; const lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1600; MUS.g=AC.createGain(); MUS.g.gain.value=MUS.on?.9:0; MUS.g.connect(lp); lp.connect(aOut()); MUS.next=AC.currentTime+.15;
   MUS.timer=setInterval(()=>{ const b=60/88; while(MUS.next<AC.currentTime+.35){ const st=MUS.step, ch=CHORDS[Math.floor(st/8)%4];
     if(st%8===0) ch.forEach(m=>mnote(m+12,MUS.next,b*3.8,.011,'triangle',.35));
     if(st%4===0) mnote(ch[0]-12,MUS.next,b*1.6,.05,'sine',.01); if(st%4===3) mnote(ch[0]-5,MUS.next,b*.5,.03,'sine',.01);

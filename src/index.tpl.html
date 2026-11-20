@@ -5,25 +5,48 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>BotMotors · A MoneyBot Game</title>
 <meta name="description" content="Buy your first car without getting played. A MoneyBot Original game about car prices, loans, insurance and the true cost of owning a car.">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>/*FONTS*/</style>
 <style>/*CSS*/</style>
 </head>
 <body>
 <canvas id="gl"></canvas>
 <div id="fade"></div>
 <!-- title -->
+<section id="boot"><div class="bt">
+  <div class="bt-pre"><img id="bLogo" alt="MoneyBot"><span>A MoneyBot game</span></div>
+  <h1>Bot<span>Motors</span></h1>
+  <div class="bt-bar"><div id="bootFill"></div></div>
+  <div class="bt-row"><span id="bootMsg">Paving the lot…</span><b id="bootPct">0%</b></div>
+  <div class="bt-tip"><em>Car-buying tip</em><p id="bootTip"></p></div>
+</div></section>
 <section id="title">
   <div class="tcard">
     <img id="tLogo" alt="MoneyBot">
     <div class="eyebrow">A MoneyBot Original</div>
     <h1>Bot<span>Motors</span></h1>
-    <p>Pick a life. Walk the lot, test drive anything, out-haggle Slick the salesbot, then live through year one and find out what a car <b>really</b> costs.</p>
-    <div class="modes"><button class="btn gold big" id="btnStory" disabled>Story mode</button><small>Prologue + 5 chapters. Get played as a buyer, then run the dealership yourself. Saves your progress.</small></div>
-    <div class="eyebrow" style="margin:6px 0 8px;color:var(--txt3)">Or free play: pick a life</div>
-    <div class="lives" id="lives"></div>
-    <div class="chips"><span>Car prices</span><span>Loans &amp; APR</span><span>Insurance</span><span>Negotiating</span><span>True cost of owning</span></div>
-    <button class="btn big" id="btnStart" disabled>Loading…</button>
-    <small class="hint">WASD or arrows to move · click to walk · H horn · M music</small>
+    <p>Walk the lot, test drive anything, out-haggle Slick the salesbot, then live through year one and find out what a car <b>really</b> costs.</p>
+    <div id="tSpons"></div>
+    <div class="tpage" id="pgMain">
+      <div class="tmenu">
+        <button class="tm pri" id="btnCont" hidden><b>Continue story</b><small id="contInfo"></small></button>
+        <button class="tm" id="btnStory" disabled><b>Story mode</b><small>Prologue + 5 chapters. Get played as a buyer, then run the dealership.</small></button>
+        <button class="tm" id="btnFree"><b>Free play</b><small>Pick a life and buy your first car</small></button>
+        <button class="tm" id="btnCalc"><b>Car cost calculator</b><small>What would a car really cost you over 5 years?</small></button>
+        <div class="tm-row"><button class="tm sm" id="btnSet"><b>Settings</b></button><button class="tm sm" id="btnHow"><b>How to play</b></button><button class="tm sm" id="btnCred"><b>Credits</b></button></div>
+      </div>
+      <div class="chips"><span>Car prices</span><span>Loans &amp; APR</span><span>Insurance</span><span>Negotiating</span><span>True cost of owning</span><span>Car careers</span></div>
+    </div>
+    <div class="tpage" id="pgSlots" hidden>
+      <button class="tback" data-back>&larr; Back</button><div class="eyebrow">Story mode · pick a save slot</div>
+      <div class="slots" id="slots"></div><button class="btn gold big" id="btnSlotGo" style="width:100%">Start</button>
+    </div>
+    <div class="tpage" id="pgFree" hidden>
+      <button class="tback" data-back>&larr; Back</button><div class="eyebrow" style="margin-bottom:8px">Free play: pick a life</div>
+      <div class="lives" id="lives"></div>
+      <button class="btn pri big" id="btnStart" disabled style="width:100%">Loading…</button>
+      <small class="hint">WASD or arrows to move · click to walk · E to interact · H horn · Esc for menu</small>
+    </div>
+    <small class="tver" id="tVer"></small>
   </div>
 </section>
 <!-- hud -->
@@ -33,7 +56,7 @@
   <div class="stat"><em>Take-home pay</em><b id="hPay">$0/mo</b></div>
   <div class="stat"><em>Credit score</em><b id="hCredit">670</b></div>
   <div class="stat goal"><em>Car budget (15%)</em><b id="hBudget">$360/mo</b></div>
-  <button class="btn ghost sm" id="btnMute" title="Music (M)">🎵</button><button class="btn ghost sm" id="btnNotes">📒 Notes</button>
+  <button class="btn ghost sm" id="btnCalcH" title="Car cost calculator">🧮</button><button class="btn ghost sm" id="btnMute" title="Music (M)">🎵</button><button class="btn ghost sm" id="btnNotes">📒 Notes</button><button class="btn ghost sm" id="btnPause" title="Menu (Esc)"></button>
 </header>
 <div id="prompt" hidden></div>
 <aside id="card" hidden></aside>

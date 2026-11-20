@@ -49,7 +49,7 @@ const DEAL_ADDONS=[{id:'warranty',name:'Extended warranty',price:1995,cost:650,j
 
 let S=null;
 const newStory=()=>({ch:0, cash:20000, rep:3, stars:[], heat:0, xp:0, up:{}, inv:[], codex:{}, sold:[], complaints:[], week:null, done:false, ending:null});
-function saveS(){ if(S) store.set('story',S); }
+function saveS(){ if(S) store.set(storyKey(),S); }
 function rank(){ let r=RANKS[0][1]; RANKS.forEach(([x,n])=>{ if(S.xp>=x) r=n; }); return r; }
 function addXP(n){ const before=rank(); S.xp+=n; if(rank()!==before){ toast('⬆️ Rank up: <b>'+rank()+'</b>','good'); sfx.good(); } }
 function codex(id,how){ if(!S) return; const c=S.codex[id]||(S.codex[id]={}); if(c[how]) return; const first=!c.spot&&!c.use; c[how]=1; saveS();
@@ -58,7 +58,7 @@ function spots(){ return 4+(S.up.lot?2:0); }
 function say(who,face,text,ms){ const e=$('#slickSays'); e.querySelector('b').textContent=who; e.querySelector('.face').textContent=face; slick(text,ms); }
 
 /* ---------- title buttons ---------- */
-function storyTitle(){ const saved=store.get('story',null), b=$('#btnStory'); if(!b) return;
+function storyTitle(){ const saved=store.get(storyKey(),null), b=$('#btnStory'); if(!b) return;
   b.innerHTML=saved&&saved.ch>0&&!saved.done?`Continue story · Chapter ${saved.ch}`:'Story mode';
   b.onclick=()=>{ audio(); musicStart(); $('#title').hidden=true; S=saved&&!saved.done?saved:newStory(); if(S.ch>0){ applyProfile(PROFILES[0]); enterDealer(); hub(); } else startPrologue(); };
   $('#btnStart').textContent='Free play'; }
@@ -297,7 +297,7 @@ function ending(){ const repaid=S.cash>=20000, honestSales=S.sold.filter(s=>s.us
   else if(S.rep>=4&&S.heat<=2) E={k:'legend', t:'Bot City Legend', icon:'🏆', p:'Top-rated lot in the city. Your customers send their kids to you. Slick shows up asking for a job. You tell him to read the Codex first.'};
   else if(S.heat>=6) E={k:'slick', t:'Slick 2.0', icon:'😎', p:'You paid the bank back, mostly with other people\'s money. The audit cost you, and your name is mud. You became the dealer you once hated.'};
   else E={k:'standing', t:'Still Standing', icon:'🔑', p:'You paid back BotBank and kept the doors open. Not perfect, not shady. Room to grow next time.'};
-  S.done=true; S.ending=E.k; const seen=store.get('endings',{}); seen[E.k]=1; store.set('endings',seen); store.set('story',S); const got=Object.keys(seen).length, cx=TACTICS.filter(t=>S.codex[t.id]&&(S.codex[t.id].spot||S.codex[t.id].use)).length;
+  S.done=true; S.ending=E.k; const seen=store.get('endings',{}); seen[E.k]=1; store.set('endings',seen); store.set(storyKey(),S); const got=Object.keys(seen).length, cx=TACTICS.filter(t=>S.codex[t.id]&&(S.codex[t.id].spot||S.codex[t.id].use)).length;
   const m=modal(`<div class="eyebrow">Ending · ${got} of 5 found</div><div class="medalrow"><div class="medal">${E.icon}</div><div><h2 style="margin:0">${E.t}</h2><p style="margin:4px 0 0">Rank: <b>${rank()}</b> · ★ ${S.rep.toFixed(1)} · Cash ${fmt(S.cash)}</p></div></div>
    <p>${E.p}</p>
    <div class="specs" style="grid-template-columns:repeat(4,1fr)"><div><em>Cars sold</em><b>${S.sold.length}</b></div><div><em>Honest deals</em><b>${honestSales}</b></div><div><em>Customers hurt</em><b style="color:${harmed?'var(--red)':''}">${harmed}</b></div><div><em>Codex</em><b>${cx}/12</b></div></div>
